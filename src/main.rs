@@ -40,7 +40,7 @@ fn identifier(input: &str) -> IResult<&str, Expr> {
 }
 
 fn paren(input: &str) -> IResult<&str, Expr> {
-  let (input, inner) = delimited(tag("("), expression, tag(")"))(input)?;
+  let (input, inner) = delimited(tag("("), expr, tag(")"))(input)?;
   Ok((input, inner))
 }
 
@@ -66,17 +66,17 @@ fn apply(input: &str) -> IResult<&str, Expr> {
   Ok((input, Expr::Apply(Box::new(f), v)))
 }
 
-fn expression(input: &str) -> IResult<&str, Expr> {
+fn expr(input: &str) -> IResult<&str, Expr> {
   let (input, e) = alt((apply, binop, single))(input)?;
   Ok((input, e))
 }
 
 fn main() {
   println!("{:?}", apply("foo 42 43 44"));
-  println!("{:?}", expression("42 + 43"));
+  println!("{:?}", expr("42 + 43"));
   // TODO: handle this case aka "Associativity Problem"
-  println!("{:?}", expression("42 + 43 + 44"));
-  println!("{:?}", expression("42 + (43 + 44)"));
+  println!("{:?}", expr("42 + 43 + 44"));
+  println!("{:?}", expr("42 + (43 + 44)"));
 }
 
 #[test]
@@ -96,8 +96,8 @@ fn parse_paren() {
 
 #[test]
 fn parse_simple_expr() {
-  assert_eq!(expression("foo"), Ok(("", Expr::Iden("foo".to_string()))));
-  assert_eq!(expression("42"), Ok(("", Expr::Int64(42))));
+  assert_eq!(expr("foo"), Ok(("", Expr::Iden("foo".to_string()))));
+  assert_eq!(expr("42"), Ok(("", Expr::Int64(42))));
 }
 
 #[test]
