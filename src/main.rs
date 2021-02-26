@@ -20,7 +20,7 @@ pub enum BinOp {
 pub enum Expr {
   Int64(i64),
   Iden(String),
-  Apply(Vec<Expr>),
+  Apply(Box<Expr>, Vec<Expr>),
   BinOp(BinOp, Box<Expr>, Box<Expr>)
 }
 
@@ -31,6 +31,7 @@ fn identifier(input: &str) -> IResult<&str, Expr> {
 }
 
 fn int64(input: &str) -> IResult<&str, Expr> {
+  println!("parse i64: {}", input);
   let (input, i) = map_res(
     digit1,
     |ds: &str| i64::from_str_radix(&ds, 10))(input)?;
@@ -38,8 +39,14 @@ fn int64(input: &str) -> IResult<&str, Expr> {
   Ok((input, Expr::Int64(i)))
 }
 
+fn single(input: &str) -> IResult<&str, Expr> {
+  // todo: add paren variant
+  let (input, e) = alt((int64, identifier))(input)?;
+  Ok((input, e))
+}
+
 fn binop(input: &str) -> IResult<&str, Expr> {
-  let (input, (e1, _, op, _, e2)) = tuple((expression, multispace0, one_of("+-*/"), multispace0, expression))(input)?;
+  let (input, (e1, _, op, _, e2)) = tuple((single, multispace0, one_of("+-*/"), multispace0, single))(input)?;
   Ok((input, Expr::BinOp(
         match op {
           '+' => BinOp::Add,
@@ -52,17 +59,20 @@ fn binop(input: &str) -> IResult<&str, Expr> {
 
 fn apply(input: &str) -> IResult<&str, Expr> {
   // todo: parse it as "fn args"
-  let (input, v) = separated_list1(multispace1, expression)(input)?;
-  Ok((input, Expr::Apply(v)))
+  let (input, (f, _, v)) = tuple((identifier, multispace1, separated_list1(multispace1, single)))(input)?;
+  Ok((input, Expr::Apply(Box::new(f), v)))
 }
 
+
 fn expression(input: &str) -> IResult<&str, Expr> {
-  let (input, e) = alt((int64, identifier, apply, binop))(input)?;
+  let (input, e) = alt((apply, binop, single))(input)?;
   Ok((input, e))
 }
 
 fn main() {
   println!("{:?}", apply("foo 42 43 44"));
+  println!("{:?}", expression("42 + 43"));
+  println!("{:?}", expression("42 + 43 + 44"));
 }
 
 #[test]
