@@ -46,6 +46,7 @@ fn iden_char(c: &char) -> bool {
 }
 
 fn valid_iden(s: &str) -> bool {
+    // TODO: use a set
     !(s == "if" || s == "then" || s == "else")
 }
 
