@@ -9,6 +9,8 @@ use nom::{
     AsChar, IResult,
 };
 
+use std::io::Write;
+
 #[derive(Debug, PartialEq)]
 pub enum BinOp {
     Add,
@@ -25,6 +27,13 @@ pub enum Expr {
     Apply(Box<Expr>, Vec<Expr>),
     BinOp(BinOp, Box<Expr>, Box<Expr>),
     Cond(Box<Expr>, Box<Expr>, Box<Expr>),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Err {
+    Read,
+    Parse,
+    Eval,
 }
 
 fn uint64(input: &str) -> IResult<&str, Expr> {
@@ -129,10 +138,66 @@ fn cond(input: &str) -> IResult<&str, Expr> {
 }
 
 fn expr(input: &str) -> IResult<&str, Expr> {
-    alt((cond, apply, binop, single))(input)
+    delimited(multispace0, alt((cond, apply, binop, single)), multispace0)(input)
 }
 
-fn main() {}
+fn eval_binop(op: &BinOp, e1: &Expr, e2: &Expr) {
+    // types???
+    // recursively eval e1/e2
+    // match on op, do the right thing
+}
+
+// TODO: what is the return type? some kind of value type...
+fn eval(e: Expr) -> String {
+    println!("EVAL! {:?}", e);
+    match e {
+        Expr::UInt64(i) => format!("{}:u64", i),
+        Expr::Str(s) => format!("{}:str", s),
+        Expr::Iden(n) => format!("iden: {}", n), // It should be an empty apply!?!
+        Expr::Apply(f, args) => format!("placeholder. apply"),
+        Expr::BinOp(op, e1, e2) => format!("placeholder. binop"),
+        Expr::Cond(pred, br1, br2) => format!("placeholder. cond"),
+    }
+}
+
+fn parse(input: &str) -> Result<Expr, Err> {
+    match expr(input) {
+        Ok(("", e)) => Ok(e),
+        _ => Err(Err::Parse),
+    }
+}
+
+fn read() -> Result<String, Err> {
+    let mut l = String::new();
+    match std::io::stdin().read_line(&mut l) {
+        Ok(n) => Ok(l),
+        _ => Err(Err::Read),
+    }
+}
+
+fn read_eval() -> Result<String, Err> {
+    let line = read()?;
+    let expr = parse(&line)?;
+    Ok(eval(expr))
+}
+
+fn repl() {
+    loop {
+        print!("$ ");
+        std::io::stdout().flush();
+        match read_eval() {
+            Ok(s) => println!("{}", s),
+            Err(e) => {
+                println!("{:?}", e);
+                break;
+            }
+        }
+    }
+}
+
+fn main() {
+    repl();
+}
 
 #[test]
 fn parse_iden() {
