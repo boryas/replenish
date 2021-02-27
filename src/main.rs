@@ -141,17 +141,6 @@ fn expr(input: &str) -> IResult<&str, Expr> {
     delimited(multispace0, alt((cond, apply, binop, single)), multispace0)(input)
 }
 
-fn typecheck(e: &Expr) -> Type {
-    match e {
-        Expr::UInt64(_) => Type::UInt64,
-        Expr::Str(_) => Type::Str,
-        Expr::Iden(_) => format!("iden: {}", n), // It should be an empty apply!?!
-        Expr::Apply(_f, _args) => format!("placeholder. apply"),
-        Expr::BinOp(_op, _e1, _e2) => format!("placeholder. binop"),
-        Expr::Cond(_pred, _br1, _br2) => format!("placeholder. cond"),
-    }
-}
-
 // TODO: what is the return type? some kind of value type...
 fn eval(e: Expr) -> String {
     println!("EVAL! {:?}", e);
@@ -285,32 +274,4 @@ fn parse_cond() {
     assert!(expr("if foo").is_err());
     assert!(expr("if foo then 42").is_err());
     assert!(expr("if then 42 else 42").is_err());
-}
-
-pub enum MutEnum {
-    A(i64),
-    B(i64)
-}
-
-fn do_it(me: &mut MutEnum) {
-    match me {
-        A(&mut x) => x += 1,
-        B(&mut x) => x *= 2
-    }
-}
-
-#[test]
-fn mut_enum() {
-    let mut a = MutEnum::A(42);
-    let mut b = MutEnum::B(42);
-    do_it(a);
-    do_it(b);
-    match a {
-        A(x) => assert_eq!(x, 43),
-        B(x) => {}
-    }
-    match b {
-        A(x) => {},
-        B(x) => assert_eq!(x, 84)
-    }
 }
