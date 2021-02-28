@@ -160,6 +160,18 @@ fn eval_iden(env: &Env, name: &str) -> Result<Value, Err> {
     }
 }
 
+fn eval_apply(env: &mut Env, name: &str, args: Vec<Expr>) -> Result<Value, Err> {
+    let mut script = std::process::Command::new(name);
+    for arg in args {
+        let _ = match eval(env, arg)? {
+            Value::UInt64(u) => script.arg(u.to_string()),
+            Value::Str(a) => script.arg(a),
+        };
+    }
+    let output = script.output().expect("failed to execute cmd");
+    let s = String::from_utf8(output.stdout).expect("invalid UTF-8 output");
+    Ok(Value::Str(s.to_string()))
+}
 
 fn eval_binop(env: &mut Env, op: BinOp, left: Box<Expr>, right: Box<Expr>) -> Result<Value, Err> {
     let lv = eval(env, *left)?;
@@ -201,7 +213,7 @@ fn eval(env: &mut Env, expr: Expr) -> Result<Value, Err> {
         Expr::UInt64(i) => Ok(Value::UInt64(i)),
         Expr::Str(s) => Ok(Value::Str(s)),
         Expr::Iden(n) => eval_iden(env, &n),
-        Expr::Apply(_f, _args) => Err(Err::Eval),
+        Expr::Apply(f, args) => eval_apply(env, &f, args),
         Expr::BinOp(op, e1, e2) => eval_binop(env, op, e1, e2),
         Expr::Cond(pred, br1, br2) => eval_cond(env, pred, br1, br2),
         Expr::Assign(n, expr) => eval_assign(env, &n, expr),
@@ -235,7 +247,7 @@ fn read_eval(env: &mut Env) -> Result<String, Err> {
 fn repl(env: &mut Env) {
     loop {
         print!("$ ");
-        std::io::stdout().flush();
+        std::io::stdout().flush().expect("failed to flush prompt");
         match read_eval(env) {
             Ok(s) => println!("{}", s),
             Err(e) => {
