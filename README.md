@@ -31,8 +31,9 @@
 
 ### expressions (operations?)
 value
-expr expr
+f expr
 expr binop expr
 unop expr
 if expr then expr else expr
+let v = expr
 for v in expr do expr

@@ -10,6 +10,7 @@ use nom::{
 };
 
 use std::io::Write;
+use std::collections::HashMap;
 
 #[derive(Debug, PartialEq)]
 pub enum BinOp {
@@ -19,11 +20,15 @@ pub enum BinOp {
     Div,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum Value {
+    UInt64(u64),
+    Str(String),
+}
+
 #[derive(Debug, PartialEq)]
-pub enum Type {
-    Bottom,
-    UInt64,
-    Str,
+pub struct Env {
+    bindings: HashMap<String, Value>
 }
 
 #[derive(Debug, PartialEq)]
@@ -31,16 +36,18 @@ pub enum Expr {
     UInt64(u64),
     Str(String),
     Iden(String),
-    Apply(Box<Expr>, Vec<Expr>),
-    BinOp(BinOp, Box<Expr>, Box<Expr>),
-    Cond(Box<Expr>, Box<Expr>, Box<Expr>),
+    Apply(String, Vec<Expr>), // iden arg1 arg2 ... argN
+    BinOp(BinOp, Box<Expr>, Box<Expr>), // expr + expr
+    Cond(Box<Expr>, Box<Expr>, Box<Expr>), // if expr then expr else expr
+    Assign(String, Box<Expr>), // let iden = expr
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Err {
-    Read,
-    Parse,
+    Env,
     Eval,
+    Parse,
+    Read,
 }
 
 fn uint64(input: &str) -> IResult<&str, Expr> {
@@ -61,11 +68,10 @@ fn iden_char(c: &char) -> bool {
 
 fn valid_iden(s: &str) -> bool {
     // TODO: use a set
-    !(s == "if" || s == "then" || s == "else")
+    !(s == "if" || s == "then" || s == "else" || s == "let")
 }
 
 fn iden(input: &str) -> IResult<&str, Expr> {
-    println!("iden? {}", input);
     let (input, id) = verify(
         recognize(tuple((
             verify(anychar, |c: &char| (*c).is_alpha() || *c == '_'),
@@ -73,29 +79,22 @@ fn iden(input: &str) -> IResult<&str, Expr> {
         ))),
         valid_iden,
     )(input)?;
-    println!("iden! input: {}, id: {}", input, id);
     Ok((input, Expr::Iden(id.to_string())))
 }
 
 fn paren(input: &str) -> IResult<&str, Expr> {
-    println!("paren? {}", input);
     let (input, inner) = delimited(tag("("), expr, tag(")"))(input)?;
-    println!("paren! {:?}", inner);
     Ok((input, inner))
 }
 
 fn single(input: &str) -> IResult<&str, Expr> {
-    println!("single? {}", input);
     let (input, e) = alt((uint64, iden, str, paren))(input)?;
-    println!("single! {}, {:?}", input, e);
     Ok((input, e))
 }
 
 fn binop(input: &str) -> IResult<&str, Expr> {
-    println!("binop? {}", input);
     let (input, (e1, _, op, _, e2)) =
         tuple((single, multispace0, one_of("+-*/"), multispace0, single))(input)?;
-    println!("binop! {}", input);
     Ok((
         input,
         Expr::BinOp(
@@ -113,44 +112,71 @@ fn binop(input: &str) -> IResult<&str, Expr> {
 }
 
 fn apply(input: &str) -> IResult<&str, Expr> {
-    println!("apply? {}", input);
     let (input, (f, _, v)) =
         tuple((iden, multispace1, separated_list1(multispace1, single)))(input)?;
-    println!("apply!");
-    Ok((input, Expr::Apply(Box::new(f), v)))
+    let name = match f {
+        Expr::Iden(name) => name,
+        _ => unreachable!(),
+    };
+    Ok((input, Expr::Apply(name, v)))
 }
 
 fn cond(input: &str) -> IResult<&str, Expr> {
-    println!("cond? {}", input);
     let (input, _if) = tag("if")(input)?;
     let (input, pred) = expr(input)?;
-    println!("cond: if {:?}", pred);
     let (input, _then) = tag("then")(input)?;
     let (input, br1) = expr(input)?;
-    println!("cond: if {:?} then {:?}", pred, br1);
     let (input, _else) = tag("else")(input)?;
     let (input, br2) = expr(input)?;
-    println!("cond: if {:?} then {:?} else {:?}", pred, br1, br2);
     Ok((
         input,
         Expr::Cond(Box::new(pred), Box::new(br1), Box::new(br2)),
     ))
 }
 
+fn assign(input: &str) -> IResult<&str, Expr> {
+    let (input, _let) = tag("let")(input)?;
+    let (input, iden) = delimited(multispace1, iden, multispace1)(input)?;
+    let name = match iden {
+        Expr::Iden(name) => name,
+        _ => unreachable!(),
+    };
+    let (input, _eq) = tag("=")(input)?;
+    let (input, expr) = expr(input)?;
+    Ok((input, Expr::Assign(name, Box::new(expr))))
+}
+
 fn expr(input: &str) -> IResult<&str, Expr> {
-    delimited(multispace0, alt((cond, apply, binop, single)), multispace0)(input)
+    delimited(multispace0, alt((assign, cond, apply, binop, single)), multispace0)(input)
+}
+
+fn eval_iden(env: &Env, name: &str) -> Result<Value, Err> {
+    match env.bindings.get(name) {
+        Some(v) => Ok(v.clone()),
+        _ => {
+            println!("no binding for {}: {:?}", name, env);
+            Err(Err::Env)
+        }
+    }
+}
+
+fn eval_assign(env: &mut Env, name: &str, expr: Box<Expr>) -> Result<Value, Err> {
+    let v = eval(env, *expr)?;
+    env.bindings.insert(name.to_string(), v.clone());
+    Ok(v.clone())
 }
 
 // TODO: what is the return type? some kind of value type...
-fn eval(e: Expr) -> String {
-    println!("EVAL! {:?}", e);
-    match e {
-        Expr::UInt64(i) => format!("{}:u64", i),
-        Expr::Str(s) => format!("{}:str", s),
-        Expr::Iden(n) => format!("iden: {}", n), // It should be an empty apply!?!
-        Expr::Apply(_f, _args) => format!("placeholder. apply"),
-        Expr::BinOp(_op, _e1, _e2) => format!("placeholder. binop"),
-        Expr::Cond(_pred, _br1, _br2) => format!("placeholder. cond"),
+fn eval(env: &mut Env, expr: Expr) -> Result<Value, Err> {
+    println!("EVAL! {:?}", expr);
+    match expr {
+        Expr::UInt64(i) => Ok(Value::UInt64(i)),
+        Expr::Str(s) => Ok(Value::Str(s)),
+        Expr::Iden(n) => eval_iden(env, &n),
+        Expr::Apply(_f, _args) => Err(Err::Eval),
+        Expr::BinOp(_op, _e1, _e2) => Err(Err::Eval),
+        Expr::Cond(_pred, _br1, _br2) => Err(Err::Eval),
+        Expr::Assign(n, expr) => eval_assign(env, &n, expr),
     }
 }
 
@@ -169,17 +195,20 @@ fn read() -> Result<String, Err> {
     }
 }
 
-fn read_eval() -> Result<String, Err> {
+fn read_eval(env: &mut Env) -> Result<String, Err> {
     let line = read()?;
     let expr = parse(&line)?;
-    Ok(eval(expr))
+    match eval(env, expr)? {
+        Value::UInt64(u) => Ok(format!("{}: u64", u)),
+        Value::Str(s) => Ok(format!("{}: str", s))
+    }
 }
 
-fn repl() {
+fn repl(env: &mut Env) {
     loop {
         print!("$ ");
         std::io::stdout().flush();
-        match read_eval() {
+        match read_eval(env) {
             Ok(s) => println!("{}", s),
             Err(e) => {
                 println!("{:?}", e);
@@ -190,7 +219,8 @@ fn repl() {
 }
 
 fn main() {
-    repl();
+    let mut env = Env { bindings: HashMap::new() };
+    repl(&mut env);
 }
 
 #[test]
@@ -250,8 +280,8 @@ fn parse_binop() {
 fn parse_apply() {
     let res = apply("foo 42");
     match res {
-        Ok(("", Expr::Apply(e1, _e2))) => {
-            assert_eq!(*e1, Expr::Iden("foo".to_string()));
+        Ok(("", Expr::Apply(f, _e2))) => {
+            assert_eq!(f, "foo".to_string());
             //assert_eq!(*e2, Expr::UInt64(42));
             //TODO: test Vec contents
         }
@@ -274,4 +304,16 @@ fn parse_cond() {
     assert!(expr("if foo").is_err());
     assert!(expr("if foo then 42").is_err());
     assert!(expr("if then 42 else 42").is_err());
+}
+
+#[test]
+fn parse_assign() {
+    let a = expr("let x = 42");
+    match a {
+        Ok(("", Expr::Assign(iden, expr))) => {
+            assert_eq!(iden, "x".to_string());
+            assert_eq!(*expr, Expr::UInt64(42));
+        }
+        _ => { println!("{:?}", a); assert!(false) }
+    }
 }

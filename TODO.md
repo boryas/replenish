@@ -18,3 +18,11 @@ organize into lib/main
 play with no-copy on &str instead of String (input lifetime)
 get rid of unneeded lets/Oks when you can just return combinator calls
 proper support for associativity, not just "bin" in binop
+think of lifetimes cleverly?
+
+store input lines
+everything thence refers back to it???
+
+OR
+
+keep copying as we do now
