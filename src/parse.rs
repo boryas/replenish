@@ -2,14 +2,14 @@ extern crate nom;
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{alphanumeric0, anychar, digit1, multispace0, multispace1, one_of},
+    character::complete::{alphanumeric0, alphanumeric1, anychar, digit1, multispace0, multispace1, one_of},
     combinator::{map_res, recognize, verify},
     multi::{many0, separated_list1},
     sequence::{delimited, tuple},
     AsChar, IResult,
 };
 
-use crate::ast::{BinOp, Expr};
+use crate::ast::{BinOp, Cmd, Expr};
 
 pub mod cmd {
 }
@@ -79,14 +79,10 @@ fn binop(input: &str) -> IResult<&str, Expr> {
 }
 
 fn cmd(input: &str) -> IResult<&str, Expr> {
-    let (input, f) = iden(input)?;
+    let (input, f) = alphanumeric1(input)?;
     let (input, _) = multispace1(input)?;
     let (input, v) = separated_list1(multispace1, single)(input)?;
-    let name = match f {
-        Expr::Iden(name) => name,
-        _ => unreachable!(),
-    };
-    Ok((input, Expr::Cmd(name, v)))
+    Ok((input, Expr::Cmd(Cmd {cmd: f.to_string(), args: v})))
 }
 
 fn cond(input: &str) -> IResult<&str, Expr> {

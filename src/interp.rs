@@ -2,7 +2,7 @@ use std::io::Write;
 use std::collections::HashMap;
 
 use crate::Err;
-use crate::ast::{BinOp, Expr};
+use crate::ast::{BinOp, Cmd, Expr};
 use crate::parse::expr;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -32,15 +32,15 @@ fn eval_iden(env: &Env, name: &str) -> Result<Value, Err> {
     }
 }
 
-fn eval_cmd(env: &mut Env, name: &str, args: Vec<Expr>) -> Result<Value, Err> {
-    let mut cmd = std::process::Command::new(name);
-    for arg in args {
+fn eval_cmd(env: &mut Env, cmd: Cmd) -> Result<Value, Err> {
+    let mut proc = std::process::Command::new(cmd.cmd);
+    for arg in cmd.args {
         let _ = match eval(env, arg)? {
-            Value::UInt64(u) => cmd.arg(u.to_string()),
-            Value::Str(a) => cmd.arg(a),
+            Value::UInt64(u) => proc.arg(u.to_string()),
+            Value::Str(a) => proc.arg(a),
         };
     }
-    let output = cmd.output().expect("failed to execute cmd");
+    let output = proc.output().expect("failed to execute cmd");
     let s = String::from_utf8(output.stdout).expect("invalid UTF-8 output");
     Ok(Value::Str(s.to_string()))
 }
@@ -85,7 +85,7 @@ fn eval(env: &mut Env, expr: Expr) -> Result<Value, Err> {
         Expr::UInt64(i) => Ok(Value::UInt64(i)),
         Expr::Str(s) => Ok(Value::Str(s)),
         Expr::Iden(n) => eval_iden(env, &n),
-        Expr::Cmd(f, args) => eval_cmd(env, &f, args),
+        Expr::Cmd(cmd) => eval_cmd(env, cmd),
         Expr::BinOp(op, e1, e2) => eval_binop(env, op, e1, e2),
         Expr::Cond(pred, br1, br2) => eval_cond(env, pred, br1, br2),
         Expr::Assign(n, expr) => eval_assign(env, &n, expr),
