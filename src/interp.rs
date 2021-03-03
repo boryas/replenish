@@ -2,12 +2,13 @@ use std::io::Write;
 use std::collections::HashMap;
 
 use crate::Err;
-use crate::ast::{BinOp, Cmd, Expr};
+use crate::ast::{BinOp, Cmd, Expr, Single};
 use crate::parse::expr;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
-    UInt64(u64),
+    Whole(u64),
+    Integer(i64),
     Str(String),
 }
 
@@ -22,13 +23,23 @@ impl Env {
     }
 }
 
-fn eval_iden(env: &Env, name: &str) -> Result<Value, Err> {
-    match env.bindings.get(name) {
+fn eval_iden(env: &Env, i: &str) -> Result<Value, Err> {
+    match env.bindings.get(i) {
         Some(v) => Ok(v.clone()),
         _ => {
-            println!("no binding for {}: {:?}", name, env);
+            println!("no binding for {}: {:?}", i, env);
             Err(Err::Env)
         }
+    }
+}
+
+fn eval_single(env: &mut Env, e: Single) -> Result<Value, Err> {
+    match e {
+        Single::Whole(u) => Ok(Value::Whole(u)),
+        Single::Integer(i) => Ok(Value::Integer(i)),
+        Single::Str(s) => Ok(Value::Str(s)),
+        Single::Iden(i) => eval_iden(env, &i),
+        Single::Paren(e) => eval(env, *e)
     }
 }
 
@@ -36,7 +47,8 @@ fn eval_cmd(env: &mut Env, cmd: Cmd) -> Result<Value, Err> {
     let mut proc = std::process::Command::new(cmd.cmd);
     for arg in cmd.args {
         let _ = match eval(env, arg)? {
-            Value::UInt64(u) => proc.arg(u.to_string()),
+            Value::Whole(u) => proc.arg(u.to_string()),
+            Value::Integer(i) => proc.arg(i.to_string()),
             Value::Str(a) => proc.arg(a),
         };
     }
@@ -49,12 +61,12 @@ fn eval_binop(env: &mut Env, op: BinOp, left: Box<Expr>, right: Box<Expr>) -> Re
     let lv = eval(env, *left)?;
     let rv = eval(env, *right)?;
     match (lv, rv) {
-        (Value::UInt64(l), Value::UInt64(r)) =>
+        (Value::Whole(l), Value::Whole(r)) =>
             match op {
-                BinOp::Add => Ok(Value::UInt64(l+r)),
-                BinOp::Sub => Ok(Value::UInt64(l-r)),
-                BinOp::Mul => Ok(Value::UInt64(l*r)),
-                BinOp::Div => Ok(Value::UInt64(l/r)),
+                BinOp::Add => Ok(Value::Whole(l+r)),
+                BinOp::Sub => Ok(Value::Whole(l-r)),
+                BinOp::Mul => Ok(Value::Whole(l*r)),
+                BinOp::Div => Ok(Value::Whole(l/r)),
             },
         _ => Err(Err::Eval)
     }
@@ -64,7 +76,8 @@ fn eval_cond(env: &mut Env, pred: Box<Expr>, br1: Box<Expr>, br2: Box<Expr>) -> 
     let p = eval(env, *pred)?;
     let truth =
         match p {
-            Value::UInt64(u) => u > 0,
+            Value::Whole(u) => u > 0,
+            Value::Integer(i) => i != 0,
             Value::Str(s) => !s.is_empty()
         };
     if truth {
@@ -82,9 +95,7 @@ fn eval_assign(env: &mut Env, name: &str, expr: Box<Expr>) -> Result<Value, Err>
 
 fn eval(env: &mut Env, expr: Expr) -> Result<Value, Err> {
     match expr {
-        Expr::UInt64(i) => Ok(Value::UInt64(i)),
-        Expr::Str(s) => Ok(Value::Str(s)),
-        Expr::Iden(n) => eval_iden(env, &n),
+        Expr::Single(e) => eval_single(env, e),
         Expr::Cmd(cmd) => eval_cmd(env, cmd),
         Expr::BinOp(op, e1, e2) => eval_binop(env, op, e1, e2),
         Expr::Cond(pred, br1, br2) => eval_cond(env, pred, br1, br2),
@@ -111,7 +122,9 @@ fn read_eval(env: &mut Env) -> Result<String, Err> {
     let line = read()?;
     let expr = parse(&line)?;
     match eval(env, expr)? {
-        Value::UInt64(u) => Ok(format!("{}: u64", u)),
+        // TODO: Display trait
+        Value::Whole(u) => Ok(format!("{}: u64", u)),
+        Value::Integer(i) => Ok(format!("{}: i64", i)),
         Value::Str(s) => Ok(format!("{}: str", s))
     }
 }

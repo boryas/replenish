@@ -1,6 +1,6 @@
 ## now
-basic type system to make eval possible
-proper types for repl (particularly eval)
+dual modes cmd/expr
+lifetime cleanup/rethink
 
 ## future
 decent error handling
@@ -8,6 +8,7 @@ does "COMPILE" make sense?
   dry run?
 type inference (?)
 all types
+apply that parsing/inference to command output!?
 loops
 functions
 scopes
@@ -16,6 +17,6 @@ set notation (s[x | x in ys, x > 2])
 pipes/streams
 
 ## cleanup
-organize into lib/bin
 proper support for associativity, not just "bin" in binop
 lifetime of AST/Env contents. Ideally, they would be references to the env? How to build up original values which are made deep nested? Box or Rc?
+presumably no need to move the Expr into the eval fn either?!?

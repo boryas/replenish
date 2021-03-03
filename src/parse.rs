@@ -9,7 +9,7 @@ use nom::{
     AsChar, IResult,
 };
 
-use crate::ast::{BinOp, Cmd, Expr};
+use crate::ast::{BinOp, Cmd, Expr, Single};
 
 pub mod cmd {
 }
@@ -17,16 +17,18 @@ pub mod cmd {
 pub mod expr {
 }
 
-fn uint64(input: &str) -> IResult<&str, Expr> {
+fn whole_num(input: &str) -> IResult<&str, Expr> {
     let (input, u) = map_res(digit1, |ds: &str| u64::from_str_radix(&ds, 10))(input)?;
-    Ok((input, Expr::UInt64(u)))
+    Ok((input, Expr::Single(Single::Whole(u))))
 }
+
+// TODO: integer
 
 fn str(input: &str) -> IResult<&str, Expr> {
     // TODO: decide what characters you want in string literals
     // TODO: escape codes
     let (input, s) = delimited(tag("\""), alphanumeric0, tag("\""))(input)?;
-    Ok((input, Expr::Str(s.to_string())))
+    Ok((input, Expr::Single(Single::Str(s.to_string()))))
 }
 
 fn iden_char(c: &char) -> bool {
@@ -46,17 +48,16 @@ fn iden(input: &str) -> IResult<&str, Expr> {
         ))),
         valid_iden,
     )(input)?;
-    Ok((input, Expr::Iden(id.to_string())))
+    Ok((input, Expr::Single(Single::Iden(id.to_string()))))
 }
 
 fn paren(input: &str) -> IResult<&str, Expr> {
     let (input, inner) = delimited(tag("("), expr, tag(")"))(input)?;
-    Ok((input, inner))
+    Ok((input, Expr::Single(Single::Paren(Box::new(inner)))))
 }
 
 fn single(input: &str) -> IResult<&str, Expr> {
-    let (input, e) = alt((uint64, iden, str, paren))(input)?;
-    Ok((input, e))
+    alt((whole_num, iden, str, paren))(input)
 }
 
 fn binop(input: &str) -> IResult<&str, Expr> {
@@ -102,7 +103,7 @@ fn assign(input: &str) -> IResult<&str, Expr> {
     let (input, _let) = tag("let")(input)?;
     let (input, iden) = delimited(multispace1, iden, multispace1)(input)?;
     let name = match iden {
-        Expr::Iden(name) => name,
+        Expr::Single(Single::Iden(name)) => name,
         _ => unreachable!(),
     };
     let (input, _eq) = tag("=")(input)?;

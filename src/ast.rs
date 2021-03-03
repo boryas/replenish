@@ -13,12 +13,19 @@ pub struct Cmd {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Expr {
-    UInt64(u64),
+pub enum Single {
+    Whole(u64),
+    Integer(i64),
     Str(String),
     Iden(String),
-    Cmd(Cmd), // iden arg1 arg2 ... argN
+    Paren(Box<Expr>)
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Expr {
+    Single(Single),
     BinOp(BinOp, Box<Expr>, Box<Expr>), // expr + expr
     Cond(Box<Expr>, Box<Expr>, Box<Expr>), // if expr then expr else expr
     Assign(String, Box<Expr>), // let iden = expr
+    Cmd(Cmd), // iden arg1 arg2 ... argN
 }
