@@ -13,19 +13,21 @@ use crate::ast::{BinOp, Cmd, Expr, Mode, Single, Special, Stmt};
 
 pub mod cmd {
     use nom::{
-        character::complete::{multispace0, multispace1, alphanumeric0, alphanumeric1},
+        character::complete::{multispace0, multispace1, alphanumeric1},
         multi::{separated_list0},
         IResult
     };
     use crate::ast::{Cmd, Expr, Single};
-    pub fn cmd(input: &str) -> IResult<&str, Cmd> {
+    pub fn cmd(input: &str) -> IResult<&str, std::process::Command> {
         let (input, f) = alphanumeric1(input)?;
+        let mut ret = std::process::Command::new(f);
         let (input, _) = multispace0(input)?;
         let (input, v) = separated_list0(multispace1, alphanumeric1)(input)?;
         let (input, _) = multispace0(input)?;
-        let args = v.into_iter().map(|s| Expr::Single(Single::Str(s.to_string()))).collect();
-        // TODO: std::process::Command??!?
-        Ok((input, Cmd {cmd: f.to_string(), args: args}))
+        for arg in v {
+            ret.arg(arg);
+        }
+        Ok((input, ret))
     }
 }
 

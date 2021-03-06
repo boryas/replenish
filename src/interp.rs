@@ -110,18 +110,16 @@ fn parse(input: &str) -> Result<Expr, Err> {
     }
 }
 
-fn parse_cmd(input: &str) -> Result<Cmd, Err> {
+fn parse_cmd(input: &str) -> Result<std::process::Command, Err> {
     match crate::parse::cmd::cmd(input) {
         Ok(("", c)) => Ok(c),
         _ => Err(Err::Parse)
     }
 }
 
-fn run_cmd(env: &mut Env, cmd: Cmd) -> Result<String, Err> {
-    match eval_cmd(env, cmd)? {
-        Value::Str(s) => Ok(s),
-        _ => Err(Err::Eval)
-    }
+fn run_cmd(env: &mut Env, mut cmd: std::process::Command) -> Result<String, Err> {
+    let output = cmd.output().expect("failed to execute cmd");
+    Ok(String::from_utf8(output.stdout).expect("invalid UTF-8 output"))
 }
 
 fn read() -> Result<String, Err> {
@@ -144,7 +142,7 @@ fn read_eval(env: &mut Env) -> Result<String, Err> {
         Value::Str(s) => Ok(format!("{}: str", s))
     }
     */
-    let cmd = parse_cmd(&line)?;
+    let mut cmd = parse_cmd(&line)?;
     run_cmd(env, cmd)
 }
 
