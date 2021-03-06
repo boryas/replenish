@@ -2,8 +2,8 @@ use std::io::Write;
 use std::collections::HashMap;
 
 use crate::Err;
-use crate::ast::{BinOp, Cmd, Expr, Single};
-use crate::parse::expr;
+use crate::ast::{BinOp, Cmd, Expr, Mode, Single, Special, Stmt};
+use crate::parse::stmt;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -103,16 +103,9 @@ fn eval(env: &mut Env, expr: Expr) -> Result<Value, Err> {
     }
 }
 
-fn parse(input: &str) -> Result<Expr, Err> {
-    match expr(input) {
-        Ok(("", e)) => Ok(e),
-        _ => Err(Err::Parse)
-    }
-}
-
-fn parse_cmd(input: &str) -> Result<std::process::Command, Err> {
-    match crate::parse::cmd::cmd(input) {
-        Ok(("", c)) => Ok(c),
+fn parse(input: &str, mode: &Mode) -> Result<Stmt, Err> {
+    match stmt(input, mode) {
+        Ok(("", s)) => Ok(s),
         _ => Err(Err::Parse)
     }
 }
@@ -130,11 +123,32 @@ fn read() -> Result<String, Err> {
     }
 }
 
-fn read_eval(env: &mut Env) -> Result<String, Err> {
+fn toggle_mode(mode: &Mode, new_mode: Option<Mode>) -> Mode {
+    match new_mode {
+        Some(m) => m,
+        None => match mode {
+            Mode::Cmd => Mode::Expr,
+            Mode::Expr => Mode::Cmd
+        }
+    }
+}
+
+fn read_eval(env: &mut Env, mode: &mut Mode) -> Result<String, Err> {
     let line = read()?;
+    let stmt = parse(&line, mode)?;
+    match stmt {
+        Stmt::Expr(e) => Ok(format!("expr! {:?}", e)),
+        Stmt::Cmd(c) => run_cmd(env, c),
+        Stmt::Special(s) => match s {
+            Special::Help => Ok(format!("mode: {:?} cmd:expr::shell:repl", *mode)),
+            Special::Quit => Err(Err::Eval),
+            Special::Mode(o) => {
+                *mode = toggle_mode(mode, o);
+                Ok(format!(""))
+            }
+        }
+    }
     /*
-    let expr = parse(&line)?;
-    match eval(env, expr)? {
     match eval(env, expr)? {
         // TODO: Display trait
         Value::Whole(u) => Ok(format!("{}: u64", u)),
@@ -142,16 +156,18 @@ fn read_eval(env: &mut Env) -> Result<String, Err> {
         Value::Str(s) => Ok(format!("{}: str", s))
     }
     */
-    let mut cmd = parse_cmd(&line)?;
-    run_cmd(env, cmd)
 }
 
 pub fn repl() {
     let mut env = Env::new();
+    let mut mode = Mode::Cmd;
     loop {
-        print!("$ ");
+        match &mode {
+            Cmd => print!("cmd> "),
+            Expr => print!("expr> ")
+        }
         std::io::stdout().flush().expect("failed to flush prompt");
-        match read_eval(&mut env) {
+        match read_eval(&mut env, &mut mode) {
             Ok(s) => println!("{}", s),
             Err(e) => {
                 println!("{:?}", e);

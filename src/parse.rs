@@ -17,17 +17,17 @@ pub mod cmd {
         multi::{separated_list0},
         IResult
     };
-    use crate::ast::{Cmd, Expr, Single};
-    pub fn cmd(input: &str) -> IResult<&str, std::process::Command> {
+    use crate::ast::Stmt;
+    pub fn cmd(input: &str) -> IResult<&str, Stmt> {
         let (input, f) = alphanumeric1(input)?;
-        let mut ret = std::process::Command::new(f);
+        let mut p = std::process::Command::new(f);
         let (input, _) = multispace0(input)?;
         let (input, v) = separated_list0(multispace1, alphanumeric1)(input)?;
         let (input, _) = multispace0(input)?;
         for arg in v {
-            ret.arg(arg);
+            p.arg(arg);
         }
-        Ok((input, ret))
+        Ok((input, Stmt::Cmd(p)))
     }
 }
 
@@ -174,6 +174,9 @@ fn expr_stmt(input: &str) -> IResult<&str, Stmt> {
     Ok((input, Stmt::Expr(e)))
 }
 
-pub fn stmt(input: &str, mode: Mode) -> IResult<&str, Stmt> {
-    alt((special, expr_stmt))(input)
+pub fn stmt<'a, 'b>(input: &'a str, mode: &'b Mode) -> IResult<&'a str, Stmt> {
+    match mode {
+        Cmd => alt((special, cmd::cmd))(input),
+        Expr => alt((special, expr_stmt))(input)
+    }
 }

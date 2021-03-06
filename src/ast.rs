@@ -44,9 +44,9 @@ pub enum Expr {
     Cmd(Cmd), // iden arg1 arg2 ... argN
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum Stmt {
     Expr(Expr),
-    Cmd(Cmd),
+    Cmd(std::process::Command),
     Special(Special),
 }
