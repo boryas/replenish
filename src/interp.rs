@@ -124,7 +124,6 @@ fn read() -> Result<String, Err> {
 }
 
 fn toggle_mode(mode: &Mode, new_mode: Option<Mode>) -> Mode {
-    println!("toggle mode: {:?}->{:?}", mode, new_mode);
     match new_mode {
         Some(m) => m,
         None => match mode {
@@ -138,26 +137,23 @@ fn read_eval(env: &mut Env, mode: &mut Mode) -> Result<String, Err> {
     let line = read()?;
     let stmt = parse(&line, mode)?;
     match stmt {
-        Stmt::Expr(e) => Ok(format!("expr! {:?}", e)),
+        Stmt::Expr(e) => match eval(env, e)? {
+            // TODO: Display trait
+            Value::Whole(u) => Ok(format!("{}: u64", u)),
+            Value::Integer(i) => Ok(format!("{}: i64", i)),
+            Value::Str(s) => Ok(format!("{}: str", s))
+        }
         Stmt::Cmd(c) => run_cmd(env, c),
         Stmt::Special(s) => match s {
             Special::Help => Ok(format!("mode: {:?} cmd:expr::shell:repl", *mode)),
             Special::Quit => Err(Err::Eval),
             Special::Mode(o) => {
-                // TODO DOESN'T ACTUALLY CHANGE JACK SHIT
                 *mode = toggle_mode(mode, o);
-                println!("new mode: {:?}", mode);
                 Ok(format!(""))
             }
         }
     }
     /*
-    match eval(env, expr)? {
-        // TODO: Display trait
-        Value::Whole(u) => Ok(format!("{}: u64", u)),
-        Value::Integer(i) => Ok(format!("{}: i64", i)),
-        Value::Str(s) => Ok(format!("{}: str", s))
-    }
     */
 }
 
@@ -165,10 +161,7 @@ pub fn repl() {
     let mut env = Env::new();
     let mut mode = Mode::Cmd;
     loop {
-        match &mode {
-            Cmd => print!("cmd> "),
-            Expr => print!("expr> ")
-        }
+        print!("{:?}> ", mode);
         std::io::stdout().flush().expect("failed to flush prompt");
         match read_eval(&mut env, &mut mode) {
             Ok(s) => println!("{}", s),
