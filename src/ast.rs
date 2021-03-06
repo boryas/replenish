@@ -13,6 +13,19 @@ pub struct Cmd {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum Mode {
+    Cmd,
+    Expr,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Special {
+    Help,
+    Quit,
+    Mode(Option<Mode>)
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Single {
     Whole(u64),
     Integer(i64),
@@ -28,4 +41,11 @@ pub enum Expr {
     Cond(Box<Expr>, Box<Expr>, Box<Expr>), // if expr then expr else expr
     Assign(String, Box<Expr>), // let iden = expr
     Cmd(Cmd), // iden arg1 arg2 ... argN
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Stmt {
+    Expr(Expr),
+    Cmd(Cmd),
+    Special(Special),
 }

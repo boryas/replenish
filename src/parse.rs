@@ -9,9 +9,23 @@ use nom::{
     AsChar, IResult,
 };
 
-use crate::ast::{BinOp, Cmd, Expr, Single};
+use crate::ast::{BinOp, Cmd, Expr, Mode, Single, Special, Stmt};
 
 pub mod cmd {
+    use nom::{
+        character::complete::{multispace0, multispace1, alphanumeric0, alphanumeric1},
+        multi::{separated_list0},
+        IResult
+    };
+    use crate::ast::{Cmd, Expr, Single};
+    pub fn cmd(input: &str) -> IResult<&str, Cmd> {
+        let (input, f) = alphanumeric1(input)?;
+        let (input, _) = multispace0(input)?;
+        let (input, v) = separated_list0(multispace1, alphanumeric1)(input)?;
+        let (input, _) = multispace0(input)?;
+        let args = v.into_iter().map(|s| Expr::Single(Single::Str(s.to_string()))).collect();
+        Ok((input, Cmd {cmd: f.to_string(), args: args}))
+    }
 }
 
 pub mod expr {
@@ -80,9 +94,11 @@ fn binop(input: &str) -> IResult<&str, Expr> {
 }
 
 fn cmd(input: &str) -> IResult<&str, Expr> {
+    let (input, _t) = tag("$(")(input)?;
     let (input, f) = alphanumeric1(input)?;
     let (input, _) = multispace1(input)?;
     let (input, v) = separated_list1(multispace1, single)(input)?;
+    let (input, _t) = tag(")")(input)?;
     Ok((input, Expr::Cmd(Cmd {cmd: f.to_string(), args: v})))
 }
 
@@ -111,6 +127,57 @@ fn assign(input: &str) -> IResult<&str, Expr> {
     Ok((input, Expr::Assign(name, Box::new(expr))))
 }
 
+fn help(input: &str) -> IResult<&str, Special> {
+    let (input, _) = alt((tag("?"), tag("help"), tag(":h")))(input)?;
+    Ok((input, Special::Help))
+}
+
+fn quit(input: &str) -> IResult<&str, Special> {
+    let (input, _) = alt((tag("quit"), tag(":q")))(input)?;
+    Ok((input, Special::Quit))
+}
+
+fn toggle_mode(input: &str) -> IResult<&str, Option<Mode>> {
+    let (input, _) = alt((tag("mode"), tag(":m")))(input)?;
+    Ok((input, None))
+}
+
+fn cmd_mode(input: &str) -> IResult<&str, Option<Mode>> {
+    let (input, _) = tag("cmd")(input)?;
+    Ok((input, Some(Mode::Cmd)))
+}
+
+fn expr_mode(input: &str) -> IResult<&str, Option<Mode>> {
+    let (input, _) = tag("expr")(input)?;
+    Ok((input, Some(Mode::Expr)))
+}
+
+fn mode(input: &str) -> IResult<&str, Special> {
+    let (input, m) = alt((toggle_mode, cmd_mode, expr_mode))(input)?;
+    Ok((input, Special::Mode(m)))
+}
+
+fn special(input: &str) -> IResult<&str, Stmt> {
+    let (input, s) = alt((help, mode, quit))(input)?;
+    Ok((input, Stmt::Special(s)))
+}
+
 pub fn expr(input: &str) -> IResult<&str, Expr> {
     delimited(multispace0, alt((assign, cond, cmd, binop, single)), multispace0)(input)
+}
+
+fn expr_stmt(input: &str) -> IResult<&str, Stmt> {
+    let (input, e) = expr(input)?;
+    Ok((input, Stmt::Expr(e)))
+}
+
+/*
+fn cmd_stmt(input: &str) -> IResult<&str, Stmt> {
+    let (input, c) = cmd(input)?;
+    Ok((input, Stmt::Cmd(c)))
+}
+*/
+
+pub fn stmt(input: &str, mode: Mode) -> IResult<&str, Stmt> {
+    alt((special, expr_stmt))(input)
 }

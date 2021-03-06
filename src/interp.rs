@@ -106,7 +106,21 @@ fn eval(env: &mut Env, expr: Expr) -> Result<Value, Err> {
 fn parse(input: &str) -> Result<Expr, Err> {
     match expr(input) {
         Ok(("", e)) => Ok(e),
-        _ => Err(Err::Parse),
+        _ => Err(Err::Parse)
+    }
+}
+
+fn parse_cmd(input: &str) -> Result<Cmd, Err> {
+    match crate::parse::cmd::cmd(input) {
+        Ok(("", c)) => Ok(c),
+        _ => Err(Err::Parse)
+    }
+}
+
+fn run_cmd(env: &mut Env, cmd: Cmd) -> Result<String, Err> {
+    match eval_cmd(env, cmd)? {
+        Value::Str(s) => Ok(s),
+        _ => Err(Err::Eval)
     }
 }
 
@@ -114,19 +128,24 @@ fn read() -> Result<String, Err> {
     let mut l = String::new();
     match std::io::stdin().read_line(&mut l) {
         Ok(_) => Ok(l),
-        _ => Err(Err::Read),
+        _ => Err(Err::Read)
     }
 }
 
 fn read_eval(env: &mut Env) -> Result<String, Err> {
     let line = read()?;
+    /*
     let expr = parse(&line)?;
+    match eval(env, expr)? {
     match eval(env, expr)? {
         // TODO: Display trait
         Value::Whole(u) => Ok(format!("{}: u64", u)),
         Value::Integer(i) => Ok(format!("{}: i64", i)),
         Value::Str(s) => Ok(format!("{}: str", s))
     }
+    */
+    let cmd = parse_cmd(&line)?;
+    run_cmd(env, cmd)
 }
 
 pub fn repl() {
