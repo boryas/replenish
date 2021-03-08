@@ -1,5 +1,4 @@
 ## cleanup
-ls -l doesn't parse
 lifetime/ownership
 whitespace parsing (traits)
 
