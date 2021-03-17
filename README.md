@@ -28,7 +28,7 @@ python:
 7
 ```
 
-But obviously, 1subprocess.check_output(["ls", d])` doesn't hold a candle to
+But obviously, `subprocess.check_output(["ls", d])` doesn't hold a candle to
 `ls $d` in terms of shell-y expressiveness.
 
 Is it possible to thread the needle and design a shell-repl hybrid that gets
