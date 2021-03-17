@@ -1,4 +1,4 @@
-use harsh::interp::repl;
+use shepl::interp::repl;
 
 fn main() {
     repl();

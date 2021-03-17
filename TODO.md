@@ -1,5 +1,4 @@
 ## cleanup
-lifetime/ownership
 whitespace parsing (traits)
 toggle_depth in parsing ctx struct
 
@@ -9,6 +8,7 @@ re-parse output
 loops
 functions
 scopes
+proper str literals (escapes)
 literals for s[] l[] d[]
 set notation (s[x | x in ys, x > 2])
 "Shell stuff" (pipes, streams, job control, etc...)

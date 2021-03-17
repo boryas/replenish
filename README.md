@@ -1,4 +1,4 @@
-# harsh
+# shepl
 
 A modal shell that tries to be a REPL too.
 
@@ -30,7 +30,7 @@ But obviously, "subprocess.check_output(["ls", d])" doesn't hold a candle to
 Is it possible to thread the needle and design a shell-repl hybrid that gets
 the best of both worlds: A rich typed environment where you can interactively
 program and a simple execution environmnent where you can manage running
-commands. The key missing part, in my opinion, is tight integration between
+commands? The key missing part, in my opinion, is tight integration between
 the two. It is annoying to try to export the artifacts of a REPL session back
 to the shell you were in.
 

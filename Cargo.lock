@@ -37,13 +37,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fed34cd105917e91daa4da6b3728c47b068749d6a62c59811f06ed2ac71d9da7"
 
 [[package]]
-name = "harsh"
-version = "0.1.0"
-dependencies = [
- "nom",
-]
-
-[[package]]
 name = "lexical-core"
 version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -86,6 +79,13 @@ name = "ryu"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
+
+[[package]]
+name = "shepl"
+version = "0.1.0"
+dependencies = [
+ "nom",
+]
 
 [[package]]
 name = "static_assertions"
