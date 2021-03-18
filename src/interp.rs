@@ -6,6 +6,8 @@ use crate::ast::{Arg, BinOp, Cmd, Expr, Mode, Single, Special, Stmt};
 use crate::parse::stmt;
 use crate::Err;
 
+use nom::error::convert_error;
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Integer(i128),
@@ -99,6 +101,10 @@ fn eval_expr(env: &mut Env, expr: Expr) -> Result<Value, Err> {
 fn parse(input: &str, mode: &Mode) -> Result<Stmt, Err> {
     match stmt(input, mode) {
         Ok(("", s)) => Ok(s),
+        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
+            println!("{}", convert_error(input, e));
+            Err(Err::Parse)
+        }
         _ => Err(Err::Parse),
     }
 }
@@ -117,8 +123,8 @@ fn run_cmd(env: &mut Env, cmd: Cmd) -> Result<Value, Err> {
             String::from_utf8(o.stdout).expect("invalid UTF-8 output"),
         )),
         Err(e) => {
-          println!("cmd failed: {:?}", e);
-          Err(Err::Run)
+            println!("cmd failed: {:?}", e);
+            Err(Err::Run)
         }
     }
 }

@@ -2,8 +2,8 @@
 whitespace parsing (traits)
 
 ## features
-don't blow out on parse fail
 handle ctrl+c/ctrl+d
+builtins (cd!)
 "Shell stuff" (pipes, streams, job control, etc...)
 decent error handling
 re-parse output

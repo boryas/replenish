@@ -1,6 +1,9 @@
 extern crate nom;
 use crate::ast::{Mode, Special, Stmt};
-use nom::{branch::alt, bytes::complete::tag, character::complete::multispace0, IResult};
+use nom::{
+    branch::alt, bytes::complete::tag, character::complete::multispace0, combinator::all_consuming, error::VerboseError,
+    IResult,
+};
 use std::cell::RefCell;
 
 thread_local! {
@@ -28,6 +31,7 @@ pub mod cmd {
         branch::alt,
         bytes::complete::{tag, take_while1},
         character::complete::{alphanumeric1, multispace1},
+        error::{VerboseError},
         multi::many0,
         IResult,
     };
@@ -40,12 +44,12 @@ pub mod cmd {
             && (crate::parse::get_toggle_depth() == 0 || c != ')')
     }
 
-    fn cmd_arg(input: &str) -> IResult<&str, Arg> {
+    fn cmd_arg(input: &str) -> IResult<&str, Arg, VerboseError<&str>> {
         let (input, a) = take_while1(arg_char)(input)?;
         Ok((input, Arg::Raw(a.to_string())))
     }
 
-    fn expr_arg(input: &str) -> IResult<&str, Arg> {
+    fn expr_arg(input: &str) -> IResult<&str, Arg, VerboseError<&str>> {
         let (input, _) = tag("$(")(input)?;
         crate::parse::inc_toggle_depth();
         let (input, e) = crate::parse::expr::expr(input)?;
@@ -54,12 +58,12 @@ pub mod cmd {
         Ok((input, Arg::Rec(Box::new(e))))
     }
 
-    fn arg(input: &str) -> IResult<&str, Arg> {
+    fn arg(input: &str) -> IResult<&str, Arg, VerboseError<&str>> {
         let (input, _) = multispace1(input)?;
         alt((expr_arg, cmd_arg))(input)
     }
 
-    pub fn cmd(input: &str) -> IResult<&str, Stmt> {
+    pub fn cmd(input: &str) -> IResult<&str, Stmt, VerboseError<&str>> {
         let (input, f) = alphanumeric1(input)?;
         let (input, v) = many0(arg)(input)?;
         Ok((
@@ -79,12 +83,13 @@ pub mod expr {
         bytes::complete::tag,
         character::complete::{alphanumeric0, anychar, digit1, multispace0, multispace1, one_of},
         combinator::{map_res, opt, recognize, verify},
+        error::{VerboseError},
         multi::many0,
         sequence::{delimited, tuple},
         AsChar, IResult,
     };
 
-    fn integer(input: &str) -> IResult<&str, Expr> {
+    fn integer(input: &str) -> IResult<&str, Expr, VerboseError<&str>> {
         let (input, neg) = opt(tag("-"))(input)?;
         let (input, n) = map_res(digit1, |ds: &str| i128::from_str_radix(&ds, 10))(input)?;
         let i = match neg {
@@ -94,7 +99,7 @@ pub mod expr {
         Ok((input, Expr::Single(Single::Integer(i))))
     }
 
-    fn str(input: &str) -> IResult<&str, Expr> {
+    fn str(input: &str) -> IResult<&str, Expr, VerboseError<&str>> {
         // TODO: decide what characters you want in string literals
         // TODO: escape codes
         let (input, s) = delimited(tag("\""), alphanumeric0, tag("\""))(input)?;
@@ -110,7 +115,7 @@ pub mod expr {
         !(s == "if" || s == "then" || s == "else" || s == "let")
     }
 
-    fn iden(input: &str) -> IResult<&str, Expr> {
+    fn iden(input: &str) -> IResult<&str, Expr, VerboseError<&str>> {
         let (input, id) = verify(
             recognize(tuple((
                 verify(anychar, |c: &char| (*c).is_alpha() || *c == '_'),
@@ -121,16 +126,16 @@ pub mod expr {
         Ok((input, Expr::Single(Single::Iden(id.to_string()))))
     }
 
-    fn paren(input: &str) -> IResult<&str, Expr> {
+    fn paren(input: &str) -> IResult<&str, Expr, VerboseError<&str>> {
         let (input, inner) = delimited(tag("("), expr, tag(")"))(input)?;
         Ok((input, Expr::Single(Single::Paren(Box::new(inner)))))
     }
 
-    fn single(input: &str) -> IResult<&str, Expr> {
+    fn single(input: &str) -> IResult<&str, Expr, VerboseError<&str>> {
         alt((integer, iden, str, paren))(input)
     }
 
-    fn binop(input: &str) -> IResult<&str, Expr> {
+    fn binop(input: &str) -> IResult<&str, Expr, VerboseError<&str>> {
         let (input, (e1, _, op, _, e2)) =
             tuple((single, multispace0, one_of("+-*/"), multispace0, single))(input)?;
         Ok((
@@ -149,7 +154,7 @@ pub mod expr {
         ))
     }
 
-    fn cmd(input: &str) -> IResult<&str, Expr> {
+    fn cmd(input: &str) -> IResult<&str, Expr, VerboseError<&str>> {
         let (input, _) = tag("$(")(input)?;
         crate::parse::inc_toggle_depth();
         let (input, c) = crate::parse::cmd::cmd(input)?;
@@ -164,7 +169,7 @@ pub mod expr {
         Ok((input, ret))
     }
 
-    fn cond(input: &str) -> IResult<&str, Expr> {
+    fn cond(input: &str) -> IResult<&str, Expr, VerboseError<&str>> {
         let (input, _if) = tag("if")(input)?;
         let (input, pred) = expr(input)?;
         let (input, _then) = tag("then")(input)?;
@@ -177,7 +182,7 @@ pub mod expr {
         ))
     }
 
-    fn assign(input: &str) -> IResult<&str, Expr> {
+    fn assign(input: &str) -> IResult<&str, Expr, VerboseError<&str>> {
         let (input, _let) = tag("let")(input)?;
         let (input, iden) = delimited(multispace1, iden, multispace1)(input)?;
         let name = match iden {
@@ -189,7 +194,7 @@ pub mod expr {
         Ok((input, Expr::Assign(name, Box::new(expr))))
     }
 
-    pub fn expr(input: &str) -> IResult<&str, Expr> {
+    pub fn expr(input: &str) -> IResult<&str, Expr, VerboseError<&str>> {
         delimited(
             multispace0,
             alt((assign, cond, cmd, binop, single)),
@@ -198,52 +203,52 @@ pub mod expr {
     }
 }
 
-fn help(input: &str) -> IResult<&str, Special> {
+fn help(input: &str) -> IResult<&str, Special, VerboseError<&str>> {
     let (input, _) = alt((tag("?"), tag("help"), tag(":h")))(input)?;
     Ok((input, Special::Help))
 }
 
-fn quit(input: &str) -> IResult<&str, Special> {
+fn quit(input: &str) -> IResult<&str, Special, VerboseError<&str>> {
     let (input, _) = alt((tag("quit"), tag(":q")))(input)?;
     Ok((input, Special::Quit))
 }
 
-fn toggle_mode(input: &str) -> IResult<&str, Option<Mode>> {
+fn toggle_mode(input: &str) -> IResult<&str, Option<Mode>, VerboseError<&str>> {
     let (input, _) = alt((tag("mode"), tag(":m")))(input)?;
     Ok((input, None))
 }
 
-fn cmd_mode(input: &str) -> IResult<&str, Option<Mode>> {
+fn cmd_mode(input: &str) -> IResult<&str, Option<Mode>, VerboseError<&str>> {
     let (input, _) = tag("cmd")(input)?;
     Ok((input, Some(Mode::Cmd)))
 }
 
-fn expr_mode(input: &str) -> IResult<&str, Option<Mode>> {
+fn expr_mode(input: &str) -> IResult<&str, Option<Mode>, VerboseError<&str>> {
     let (input, _) = tag("expr")(input)?;
     Ok((input, Some(Mode::Expr)))
 }
 
-fn mode(input: &str) -> IResult<&str, Special> {
+fn mode(input: &str) -> IResult<&str, Special, VerboseError<&str>> {
     let (input, m) = alt((toggle_mode, cmd_mode, expr_mode))(input)?;
     Ok((input, Special::Mode(m)))
 }
 
-fn special(input: &str) -> IResult<&str, Stmt> {
+fn special(input: &str) -> IResult<&str, Stmt, VerboseError<&str>> {
     let (input, s) = alt((help, mode, quit))(input)?;
     Ok((input, Stmt::Special(s)))
 }
 
-fn expr_stmt(input: &str) -> IResult<&str, Stmt> {
+fn expr_stmt(input: &str) -> IResult<&str, Stmt, VerboseError<&str>> {
     let (input, e) = crate::parse::expr::expr(input)?;
     Ok((input, Stmt::Expr(e)))
 }
 
-pub fn stmt<'a, 'b>(input: &'a str, mode: &'b Mode) -> IResult<&'a str, Stmt> {
+pub fn stmt<'a, 'b>(input: &'a str, mode: &'b Mode) -> IResult<&'a str, Stmt, VerboseError<&'a str>> {
     let (input, _) = multispace0(input)?;
     let (input, ret) = match mode {
         Mode::Cmd => alt((special, cmd::cmd))(input),
         Mode::Expr => alt((special, expr_stmt))(input),
     }?;
-    let (input, _) = multispace0(input)?;
+    let (input, _) = all_consuming(multispace0)(input)?;
     Ok((input, ret))
 }
