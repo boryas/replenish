@@ -1,4 +1,4 @@
-# shepl
+# replenish
 
 A modal shell that tries to be a REPL too.
 

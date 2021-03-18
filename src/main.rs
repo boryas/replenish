@@ -1,4 +1,4 @@
-use shepl::interp::repl;
+use replenish::interp::repl;
 
 fn main() {
     repl();

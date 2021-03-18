@@ -1,5 +1,5 @@
 [package]
-name = "shepl"
+name = "replenish"
 version = "0.1.0"
 authors = ["Boris Burkov <boris@bur.io>"]
 edition = "2018"
