@@ -129,10 +129,10 @@ fn run_cmd(env: &mut Env, cmd: Cmd) -> Result<Value, Err> {
     }
 }
 
-fn read() -> Result<String, Err> {
+fn read() -> Result<(usize, String), Err> {
     let mut l = String::new();
     match std::io::stdin().read_line(&mut l) {
-        Ok(_) => Ok(l),
+        Ok(sz) => Ok((sz, l)),
         _ => Err(Err::Read),
     }
 }
@@ -161,7 +161,11 @@ pub fn repl() {
     loop {
         print!("{:?}> ", mode);
         std::io::stdout().flush().expect("failed to flush prompt");
-        let line = read().expect("input error!");
+        let line = match read() {
+          Ok((0, _)) => break, // eof, clever that it knows I don't use `line`..
+          Ok((_, l)) => l,
+          _ => panic!("input error!"),
+        };
         match parse(&line, &mode) {
             Ok(Stmt::Special(s)) => match s {
                 Special::Help => println!("mode: {:?} cmd:expr::shell:repl", mode),

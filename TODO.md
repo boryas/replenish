@@ -2,10 +2,9 @@
 whitespace parsing (traits)
 
 ## features
-handle ctrl+c/ctrl+d
+decent error handling
 builtins (cd!)
 "Shell stuff" (pipes, streams, job control, etc...)
-decent error handling
 re-parse output
 literals for s[] l[] d[]
 functions
