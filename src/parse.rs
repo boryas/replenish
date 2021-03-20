@@ -31,6 +31,7 @@ pub mod cmd {
         branch::alt,
         bytes::complete::{tag, take_while1},
         character::complete::{alphanumeric1, multispace1},
+        combinator::recognize,
         error::{VerboseError},
         multi::many0,
         IResult,
@@ -64,7 +65,7 @@ pub mod cmd {
     }
 
     pub fn cmd(input: &str) -> IResult<&str, Stmt, VerboseError<&str>> {
-        let (input, f) = alphanumeric1(input)?;
+        let (input, f) = recognize(cmd_arg)(input)?;
         let (input, v) = many0(arg)(input)?;
         Ok((
             input,
