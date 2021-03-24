@@ -65,6 +65,62 @@ pub mod err {
     }
 }
 
+pub mod lex {
+    use nom::{
+        character::complete::{multispace0, multispace1},
+        IResult,
+    };
+
+    pub enum Op {
+        Add,
+        Sub,
+        Mul,
+        Div,
+        Eq,
+        Neq,
+        Gt,
+        Gte,
+        Lt,
+        Lte,
+        And,
+        Or,
+        Xor,
+        BitAnd,
+        BitOr,
+    }
+
+    pub enum Tok {
+        OpenModeToggle,
+        CloseModeToggle,
+        OpenParen,
+        CloseParen,
+        Op(Op),
+        Let,
+        If,
+        Then,
+        Else,
+        StrLit(String),
+        Int(i128),
+        Raw(String),
+    }
+
+    // TODO fn tok_char ripping off arg_char (and eventually adding escapes)
+    // or EndOfToken as below
+
+    fn lex_one(input: &str) -> IResult<&str, Tok, err::Err<&str>> {
+        let (input, _) = multispace0(input)?;
+        // TODO: properly handle token end (close paren and dec paren count/whitespace)
+        // probably with nom::bytes::complete::take_until and a combinator for EndOfTok
+        // or take_while and a combinator for "anything but end of token"
+    }
+
+    pub fn lex(input: &str) -> IResult<&str, Vec<Tok>, err::Err<&str>> {
+        many0(lex_one)(input)
+        // end of lex -> all parens closed
+        // Track a stack of open parens instead of a counter for a better error message
+    }
+}
+
 pub mod cmd {
     use crate::parse::err;
     use crate::ast::{Arg, Cmd, Stmt};
