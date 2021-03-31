@@ -32,7 +32,6 @@ pub enum Op {
     BitOr,
 }
 
-// TODO store position
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tok {
     OpenModeToggle,
@@ -50,7 +49,7 @@ pub enum Tok {
 }
 
 #[derive(Clone, Copy)]
-struct LexPos {
+pub struct LexPos {
     col: usize,
     ln: usize,
 }
@@ -98,13 +97,6 @@ fn pop_paren() {
         (*ctx).borrow_mut().parens.pop_back();
     })
 }
-
-// NOTE:
-// how to handle global paren stack?
-// 1. thread local "global" variable
-// 2. figure out lifetimes to pass a closure to a combinator
-// 3. use combinators to eliminate the extra parameter without using a closure exactly ("named
-//    closure"???
 
 fn open_mode(input: &str) -> IResult<&str, Tok, err::Err<&str>> {
     let (input, _) = tag("$(")(input)?;
@@ -282,7 +274,6 @@ fn iden(input: &str) -> IResult<&str, Tok, err::Err<&str>> {
 }
 
 fn raw(input: &str) -> IResult<&str, Tok, err::Err<&str>> {
-    println!("tok: {}", input);
     let (input, _) = peek(anychar)(input)?;
     Ok(("", Tok::Raw(input.to_string())))
 }
@@ -311,8 +302,23 @@ fn end_of_token(c: char) -> bool {
         || (c == '>')
 }
 
+pub mod expr {
+    use crate::parse::err;
+    use crate::lex::{ keyword, sep, op, iden, lit, Lexeme, LexPos };
+    use nom::{ branch::alt, IResult };
+
+    fn lex_one(input: &str) -> IResult<&str, Lexeme, err::Err<&str>> {
+        let orig_len = input.len();
+        let ((input, t)) = alt((keyword, sep, op, iden, lit))(input)?;
+        Ok((input, Lexeme{
+            tok: t,
+            pos: LexPos { col: 0, ln: 0 }, // TODO: use ctx
+            len: orig_len - input.len(),
+        }))
+    }
+}
+
 fn lex_one(input: &str) -> IResult<&str, Tok, err::Err<&str>> {
-    println!("one: {}", input);
     let (input, _) = multispace0(input)?;
     let (input, tok) = alt((
             keyword,
@@ -322,14 +328,15 @@ fn lex_one(input: &str) -> IResult<&str, Tok, err::Err<&str>> {
             lit,
             map_parser(take_till(end_of_token), raw),
     ))(input)?;
-    println!("one tok: {:?}", tok);
     let (input, _) = multispace0(input)?;
     Ok((input, tok))
 }
 
+// TODO:
+// split into expr/cmd
+// change many0 into a while loop that gets back lexemes and handles mode changes
 pub fn lex(input: &str) -> IResult<&str, Vec<Tok>, err::Err<&str>> {
     many0(lex_one)(input)
-        // Track a stack of open parens instead of a counter for a better error message
 }
 
 #[test]
