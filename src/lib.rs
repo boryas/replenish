@@ -1,6 +1,6 @@
 pub mod ast;
-pub mod lex;
 pub mod interp;
+pub mod lex;
 pub mod parse;
 
 #[derive(Debug, PartialEq)]

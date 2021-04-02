@@ -48,13 +48,13 @@ pub enum Tok {
     Raw(String),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct LexPos {
     col: usize,
     ln: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Lexeme {
     tok: Tok,
     pos: LexPos,
@@ -203,8 +203,7 @@ fn assign(input: &str) -> IResult<&str, Op, err::Err<&str>> {
 
 fn op(input: &str) -> IResult<&str, Tok, err::Err<&str>> {
     let (input, o) = alt((
-            add, sub, mul, div, neq, op_not, eq, gte, gt, lte, lt, and, or, xor, bitand, bitor,
-            assign,
+        add, sub, mul, div, neq, op_not, eq, gte, gt, lte, lt, and, or, xor, bitand, bitor, assign,
     ))(input)?;
     Ok((input, Tok::Op(o)))
 }
@@ -265,8 +264,8 @@ fn valid_iden(s: &str) -> bool {
 fn iden(input: &str) -> IResult<&str, Tok, err::Err<&str>> {
     let (input, id) = verify(
         recognize(tuple((
-                    verify(anychar, |c: &char| (*c).is_alpha() || *c == '_'),
-                    many0(verify(anychar, iden_char)),
+            verify(anychar, |c: &char| (*c).is_alpha() || *c == '_'),
+            many0(verify(anychar, iden_char)),
         ))),
         valid_iden,
     )(input)?;
@@ -303,48 +302,55 @@ fn end_of_token(c: char) -> bool {
 }
 
 pub mod expr {
+    use crate::lex::{iden, keyword, lit, op, sep, LexPos, Lexeme};
     use crate::parse::err;
-    use crate::lex::{ keyword, sep, op, iden, lit, Lexeme, LexPos };
-    use nom::{ branch::alt, IResult };
+    use nom::{branch::alt, character::complete::multispace0, IResult};
 
-    fn lex_one(input: &str) -> IResult<&str, Lexeme, err::Err<&str>> {
+    pub fn lex_one(input: &str) -> IResult<&str, Lexeme, err::Err<&str>> {
         let orig_len = input.len();
-        let ((input, t)) = alt((keyword, sep, op, iden, lit))(input)?;
-        Ok((input, Lexeme{
-            tok: t,
-            pos: LexPos { col: 0, ln: 0 }, // TODO: use ctx
-            len: orig_len - input.len(),
-        }))
+        let (input, _) = multispace0(input)?;
+        let (input, t) = alt((keyword, sep, op, iden, lit))(input)?;
+        let (input, _) = multispace0(input)?;
+        Ok((
+            input,
+            Lexeme {
+                tok: t,
+                pos: LexPos { col: 0, ln: 0 }, // TODO: use ctx
+                len: orig_len - input.len(),
+            },
+        ))
     }
-}
-
-fn lex_one(input: &str) -> IResult<&str, Tok, err::Err<&str>> {
-    let (input, _) = multispace0(input)?;
-    let (input, tok) = alt((
-            keyword,
-            sep,
-            op,
-            iden,
-            lit,
-            map_parser(take_till(end_of_token), raw),
-    ))(input)?;
-    let (input, _) = multispace0(input)?;
-    Ok((input, tok))
 }
 
 // TODO:
-// split into expr/cmd
-// change many0 into a while loop that gets back lexemes and handles mode changes
-pub fn lex(input: &str) -> IResult<&str, Vec<Tok>, err::Err<&str>> {
-    many0(lex_one)(input)
-}
-
-#[test]
-fn test_num() {
-    match lex("42") {
-        Ok((_, actual)) => assert_eq!(actual, vec![Tok::IntLit(42)]),
-        e => panic!("bad lex {:?}", e),
+// expr vs cmd
+pub fn lex(input: &str) -> IResult<&str, Vec<Lexeme>, err::Err<&str>> {
+    let mut lxs: Vec<Lexeme> = Vec::new();
+    let mut inp = input;
+    loop {
+        let old_len = inp.len();
+        let (i_tmp, lx) = crate::lex::expr::lex_one(inp)?;
+        inp = i_tmp;
+        let new_len = inp.len();
+        if old_len == new_len {
+            panic!("did not consuuuume");
+        }
+        /*
+        LEX_CTX.with(|ctx| {
+            let lx = Lexeme {
+                tok: tok,
+                pos: (*ctx).borrow().pos,
+                len: old_len - new_len,
+            };
+            lxs.push(lx);
+        });
+        */
+        lxs.push(lx);
+        if inp.len() == 0 {
+            break;
+        }
     }
+    Ok(("", lxs))
 }
 
 #[cfg(test)]
@@ -353,11 +359,22 @@ fn do_lex_test(inputs: Vec<&str>, expected: Vec<Tok>) {
         match lex(input) {
             Ok((i, actual)) => {
                 assert_eq!(i, "");
-                assert_eq!(expected, actual)
+                let mut toks: Vec<Tok> = Vec::new();
+                for lx in actual {
+                    toks.push(lx.tok);
+                }
+                assert_eq!(expected, toks)
             }
             e => panic!("bad lex {:?}", e),
         }
     }
+}
+
+#[test]
+fn test_num() {
+    let inputs = vec!["42"];
+    let toks = vec![Tok::IntLit(42)];
+    do_lex_test(inputs, toks);
 }
 
 #[test]
@@ -418,8 +435,12 @@ fn do_binop_test(op_str: &str, op: Op) {
         match lex(&input) {
             Ok((i, actual)) => {
                 assert_eq!(i, "");
-                assert_eq!(expected, actual)
-            }
+                let mut toks: Vec<Tok> = Vec::new();
+                for lx in actual {
+                    toks.push(lx.tok);
+                }
+                assert_eq!(expected, toks)
+            },
             e => panic!("bad lex {:?}", e),
         }
     }
@@ -508,7 +529,7 @@ fn test_str_lit() {
     do_str_lit_test(
         "foo bar
         baz",
-        );
-        do_str_lit_test(");<><${}${()); )");
-        do_str_lit_test("Ææ");
-    }
+    );
+    do_str_lit_test(");<><${}${()); )");
+    do_str_lit_test("Ææ");
+}
