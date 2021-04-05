@@ -3,7 +3,7 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_till, take_until},
     character::complete::{anychar, digit1, multispace0, satisfy},
-    combinator::{map_parser, map_res, not, peek, recognize, verify},
+    combinator::{consumed, map_parser, map_res, not, peek, recognize, verify},
     multi::many0,
     sequence::{delimited, tuple},
     AsChar, IResult,
@@ -96,6 +96,40 @@ fn pop_paren() {
         // TODO: communicate what you popped (open paren vs open mode toggle)
         (*ctx).borrow_mut().parens.pop_back();
     })
+}
+
+pub fn ctx_reset() {
+    LEX_CTX.with(|ctx| {
+        *(*ctx).borrow_mut() = LexCtx::new();
+    })
+}
+
+pub fn ctx_pos_forward(off: usize) {
+    LEX_CTX.with(|ctx| {
+        {
+            let col: &mut usize = &mut (*ctx).borrow_mut().pos.col;
+            *col += off;
+        }
+    })
+}
+
+pub fn ctx_pos_new_line() {
+    LEX_CTX.with(|ctx| {
+        {
+            let ln: &mut usize = &mut (*ctx).borrow_mut().pos.ln;
+            *ln += 1;
+        }
+        {
+            let col: &mut usize = &mut (*ctx).borrow_mut().pos.col;
+            *col = 0;
+        }
+    })
+}
+
+pub fn ctx_pos() -> LexPos {
+    let mut pos = LexPos { col: 0, ln: 0 };
+    LEX_CTX.with(|ctx| pos = (*ctx).borrow().pos);
+    pos
 }
 
 fn open_mode(input: &str) -> IResult<&str, Tok, err::Err<&str>> {
@@ -302,21 +336,41 @@ fn end_of_token(c: char) -> bool {
 }
 
 pub mod expr {
-    use crate::lex::{iden, keyword, lit, op, sep, LexPos, Lexeme};
+    use crate::lex::{ctx_pos, ctx_pos_forward, ctx_pos_new_line, iden, keyword, lit, op, sep, Lexeme};
     use crate::parse::err;
-    use nom::{branch::alt, character::complete::multispace0, IResult};
+    use nom::{branch::alt, character::complete::multispace0, combinator::consumed, IResult};
+
+    fn update_pos(consumed: &str) {
+        let mut lns = consumed.lines();
+        match lns.next() {
+            Some(ln) => {
+                ctx_pos_forward(ln.len())
+            },
+            None => (),
+        }
+        for ln in lns {
+            ctx_pos_new_line();
+            ctx_pos_forward(ln.len());
+        }
+    }
 
     pub fn lex_one(input: &str) -> IResult<&str, Lexeme, err::Err<&str>> {
-        let orig_len = input.len();
-        let (input, _) = multispace0(input)?;
-        let (input, t) = alt((keyword, sep, op, iden, lit))(input)?;
-        let (input, _) = multispace0(input)?;
+        let (input, w_str1) = multispace0(input)?;
+        update_pos(w_str1);
+
+        let pos = ctx_pos();
+        let (input, (t_str, t)) = consumed(alt((keyword, sep, op, iden, lit)))(input)?;
+        update_pos(t_str);
+
+        let (input, w_str2) = multispace0(input)?;
+        update_pos(w_str2);
+
         Ok((
             input,
             Lexeme {
                 tok: t,
-                pos: LexPos { col: 0, ln: 0 }, // TODO: use ctx
-                len: orig_len - input.len(),
+                pos: pos,
+                len: t_str.len(),
             },
         ))
     }
@@ -325,31 +379,22 @@ pub mod expr {
 // TODO:
 // expr vs cmd
 pub fn lex(input: &str) -> IResult<&str, Vec<Lexeme>, err::Err<&str>> {
+    ctx_reset();
     let mut lxs: Vec<Lexeme> = Vec::new();
     let mut inp = input;
     loop {
-        let old_len = inp.len();
-        let (i_tmp, lx) = crate::lex::expr::lex_one(inp)?;
+        let (i_tmp, (lx_str, lx)) = consumed(crate::lex::expr::lex_one)(inp)?;
         inp = i_tmp;
-        let new_len = inp.len();
-        if old_len == new_len {
+        if lx_str == "" {
             panic!("did not consuuuume");
         }
-        /*
-        LEX_CTX.with(|ctx| {
-            let lx = Lexeme {
-                tok: tok,
-                pos: (*ctx).borrow().pos,
-                len: old_len - new_len,
-            };
-            lxs.push(lx);
-        });
-        */
         lxs.push(lx);
         if inp.len() == 0 {
             break;
         }
     }
+
+    println!("lexed: {} as {:?}", input, lxs);
     Ok(("", lxs))
 }
 
@@ -440,7 +485,7 @@ fn do_binop_test(op_str: &str, op: Op) {
                     toks.push(lx.tok);
                 }
                 assert_eq!(expected, toks)
-            },
+            }
             e => panic!("bad lex {:?}", e),
         }
     }
