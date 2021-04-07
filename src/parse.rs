@@ -31,6 +31,7 @@ pub mod err {
 
     #[derive(Debug)]
     pub enum Err<I> {
+        Unimp,
         Int(I, String),
         Nom(I, ErrorKind),
     }
@@ -42,11 +43,10 @@ pub mod err {
         fn append(_input: I, _kind: ErrorKind, other: Self) -> Self {
             other
         }
+        // TODO
+        // or
+        // from_char
     }
-
-    // TODO
-    // or
-    // from_char
 
     impl<I> FromExternalError<I, std::num::ParseIntError> for Err<I> {
         fn from_external_error(input: I, _kind: ErrorKind, e: std::num::ParseIntError) -> Self {

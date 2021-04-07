@@ -1,4 +1,5 @@
 use crate::parse::err;
+use crate::ast::Mode;
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_until},
@@ -46,6 +47,7 @@ pub enum Tok {
     StrLit(String),
     Iden(String),
     Raw(String),
+    Word(String),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -343,9 +345,14 @@ fn end_of_token(c: char) -> bool {
 }
 
 pub mod repl {
-    use crate::lex::{ctx_pos, ctx_pos_forward, ctx_pos_new_line, iden, keyword, lit, op, sep, Lexeme};
+    use crate::lex::{ctx_pos, ctx_pos_update, iden, keyword, lit, op, sep, Lexeme};
     use crate::parse::err;
-    use nom::{branch::alt, character::complete::multispace0, combinator::consumed, IResult};
+    use nom::{
+        branch::alt,
+        character::complete::multispace0,
+        combinator::consumed,
+        IResult
+    };
 
     pub fn lex_one(input: &str) -> IResult<&str, Lexeme, err::Err<&str>> {
         let (input, w_str1) = multispace0(input)?;
@@ -370,23 +377,73 @@ pub mod repl {
 }
 
 pub mod shell {
+    use crate::lex::{ctx_pos, ctx_pos_update, Lexeme, Tok, sep};
+    use crate::parse::err;
+    use nom::{
+        branch::alt,
+        bytes::complete::take_while1,
+        character::complete::multispace0,
+        combinator::consumed,
+        IResult
+    };
+
+    fn word_char(c: char) -> bool {
+        (c != ' ')
+            && (c != '\t')
+            && (c != '\n')
+            && (c != '\r')
+            && (c != ')') // TODO: what about legit desire to use parens?!
+    }
+
+    fn word(input: &str) -> IResult<&str, Tok, err::Err<&str>> {
+        let (input, w) = take_while1(word_char)(input)?;
+        Ok((input, Tok::Word(w.to_string())))
+    }
+
     pub fn lex_one(input: &str) -> IResult<&str, Lexeme, err::Err<&str>> {
+        let (input, w_str1) = multispace0(input)?;
+        ctx_pos_update(w_str1);
+
+        let tok_pos = ctx_pos();
+        let (input, (tok_str, tok)) = consumed(alt((sep, word)))(input)?;
+        ctx_pos_update(tok_str);
+
+        let (input, w_str2) = multispace0(input)?;
+        ctx_pos_update(w_str2);
+
+        Ok((
+            input,
+            Lexeme {
+                tok: tok,
+                pos: tok_pos,
+                len: tok_str.len(),
+            },
+        ))
     }
 }
 
 // TODO:
-// expr vs cmd
-pub fn lex(input: &str) -> IResult<&str, Vec<Lexeme>, err::Err<&str>> {
+// shell vs repl
+pub fn lex<'a, 'b>(input: &'a str, m: &'b Mode) -> IResult<&'a str, Vec<Lexeme>, err::Err<&'a str>> {
     ctx_reset();
     let mut lxs: Vec<Lexeme> = Vec::new();
     let mut inp = input;
+    // TODO: mut again when handling modes..
+    let lex_mode = m;
     loop {
-        let (i_tmp, (lx_str, lx)) = consumed(crate::lex::repl::lex_one)(inp)?;
+        let lex_one_fn = match lex_mode {
+            Mode::Cmd => crate::lex::shell::lex_one,
+            Mode::Expr => crate::lex::repl::lex_one,
+        };
+        let (i_tmp, (lx_str, lx)) = consumed(lex_one_fn)(inp)?;
         inp = i_tmp;
         if lx_str == "" {
             panic!("did not consuuuume");
         }
         lxs.push(lx);
+        // TODO: refactor paren logic to push/pop the Lexeme
+        // and to reasonably handle mismatches
+        // (maybe even allowing it as non-terminating)
         if inp.len() == 0 {
             break;
         }
@@ -397,9 +454,9 @@ pub fn lex(input: &str) -> IResult<&str, Vec<Lexeme>, err::Err<&str>> {
 }
 
 #[cfg(test)]
-fn do_lex_test(inputs: Vec<&str>, expected: Vec<Tok>) {
+fn do_lex_test(inputs: Vec<&str>, expected: Vec<Tok>, mode: Mode) {
     for input in inputs.into_iter() {
-        match lex(input) {
+        match lex(input, &mode) {
             Ok((i, actual)) => {
                 assert_eq!(i, "");
                 let mut toks: Vec<Tok> = Vec::new();
@@ -413,11 +470,21 @@ fn do_lex_test(inputs: Vec<&str>, expected: Vec<Tok>) {
     }
 }
 
+#[cfg(test)]
+fn do_repl_lex_test(inputs: Vec<&str>, expected: Vec<Tok>) {
+    do_lex_test(inputs, expected, Mode::Expr)
+}
+
+#[cfg(test)]
+fn do_shell_lex_test(inputs: Vec<&str>, expected: Vec<Tok>) {
+    do_lex_test(inputs, expected, Mode::Cmd)
+}
+
 #[test]
 fn test_num() {
     let inputs = vec!["42"];
     let toks = vec![Tok::IntLit(42)];
-    do_lex_test(inputs, toks);
+    do_repl_lex_test(inputs, toks);
 }
 
 #[test]
@@ -431,17 +498,17 @@ fn test_if_then_else() {
         Tok::Else,
         Tok::Iden("b2".to_string()),
     ];
-    do_lex_test(inputs, toks);
+    do_repl_lex_test(inputs, toks);
 }
 
 #[test]
 fn test_keyword_vs_iden() {
     let i1 = vec!["if f"];
     let toks1 = vec![Tok::If, Tok::Iden("f".to_string())];
-    do_lex_test(i1, toks1);
+    do_repl_lex_test(i1, toks1);
     let i2 = vec!["iff"];
     let toks2 = vec![Tok::Iden("iff".to_string())];
-    do_lex_test(i2, toks2);
+    do_repl_lex_test(i2, toks2);
     let i3 = vec!["if(f)"];
     let toks3 = vec![
         Tok::If,
@@ -449,7 +516,7 @@ fn test_keyword_vs_iden() {
         Tok::Iden("f".to_string()),
         Tok::CloseParen,
     ];
-    do_lex_test(i3, toks3);
+    do_repl_lex_test(i3, toks3);
 }
 
 #[test]
@@ -460,7 +527,7 @@ fn test_assign() {
         Tok::Op(Op::Assign),
         Tok::Iden("expr".to_string()),
     ];
-    do_lex_test(inputs, toks);
+    do_repl_lex_test(inputs, toks);
 }
 
 #[cfg(test)]
@@ -473,9 +540,10 @@ fn do_binop_test(op_str: &str, op: Op) {
         format!("42{} 42", op_str),
         format!("42 {}42", op_str),
     ];
-    // Can't use do_lex_test because of String vs &str
+    // Can't use do_repl_lex_test because of String vs &str
+    let m = Mode::Expr;
     for input in inputs.into_iter() {
-        match lex(&input) {
+        match lex(&input, &m) {
             Ok((i, actual)) => {
                 assert_eq!(i, "");
                 let mut toks: Vec<Tok> = Vec::new();
@@ -527,14 +595,14 @@ fn test_parens() {
         Tok::CloseParen,
         Tok::CloseParen,
     ];
-    do_lex_test(inputs, toks);
+    do_repl_lex_test(inputs, toks);
 }
 
 #[test]
 fn test_mode_toggle() {
     let inputs = vec!["$()", "$( )"];
     let toks = vec![Tok::OpenModeToggle, Tok::CloseParen];
-    do_lex_test(inputs, toks);
+    do_repl_lex_test(inputs, toks);
 }
 
 #[test]
@@ -546,7 +614,7 @@ fn test_mix_toggle_paren() {
         Tok::CloseParen,
         Tok::CloseParen,
     ];
-    do_lex_test(inputs1, toks1);
+    do_repl_lex_test(inputs1, toks1);
     let inputs2 = vec!["($())", "( $( ) )"];
     let toks2 = vec![
         Tok::OpenParen,
@@ -554,7 +622,7 @@ fn test_mix_toggle_paren() {
         Tok::CloseParen,
         Tok::CloseParen,
     ];
-    do_lex_test(inputs2, toks2);
+    do_repl_lex_test(inputs2, toks2);
 }
 
 #[cfg(test)]
@@ -562,7 +630,7 @@ fn do_str_lit_test(s: &str) {
     let strung = format!("\"{}\"", s);
     let input = vec![&strung[..]];
     let tok = vec![Tok::StrLit(s.to_string())];
-    do_lex_test(input, tok);
+    do_repl_lex_test(input, tok);
 }
 
 #[test]
@@ -575,4 +643,15 @@ fn test_str_lit() {
     );
     do_str_lit_test(");<><${}${()); )");
     do_str_lit_test("Ææ");
+}
+
+#[test]
+fn test_simple_shell_cmd() {
+    let inputs = vec!["ls -l /foo/bar", "   ls    -l    /foo/bar  "];
+    let toks = vec![
+        Tok::Word("ls".to_string()),
+        Tok::Word("-l".to_string()),
+        Tok::Word("/foo/bar".to_string()),
+    ];
+    do_shell_lex_test(inputs, toks);
 }
