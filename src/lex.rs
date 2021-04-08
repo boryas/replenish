@@ -101,10 +101,8 @@ pub fn ctx_reset() {
 
 fn ctx_pos_forward(off: usize) {
     LEX_CTX.with(|ctx| {
-        {
-            let col: &mut usize = &mut (*ctx).borrow_mut().pos.col;
-            *col += off;
-        }
+        let col: &mut usize = &mut (*ctx).borrow_mut().pos.col;
+        *col += off;
     })
 }
 
@@ -124,9 +122,7 @@ fn ctx_pos_new_line() {
 fn ctx_pos_update(consumed: &str) {
     let mut lns = consumed.lines();
     match lns.next() {
-        Some(ln) => {
-            ctx_pos_forward(ln.len())
-        },
+        Some(ln) => ctx_pos_forward(ln.len()),
         None => (),
     }
     for ln in lns {
@@ -335,14 +331,9 @@ fn end_of_token(c: char) -> bool {
 }
 
 pub mod repl {
-    use crate::lex::{ctx_pos, ctx_pos_update, iden, keyword, lit, op, sep, Lexeme};
     use crate::err;
-    use nom::{
-        branch::alt,
-        character::complete::multispace0,
-        combinator::consumed,
-        IResult
-    };
+    use crate::lex::{ctx_pos, ctx_pos_update, iden, keyword, lit, op, sep, Lexeme};
+    use nom::{branch::alt, character::complete::multispace0, combinator::consumed, IResult};
 
     pub fn lex_one(input: &str) -> IResult<&str, Lexeme, err::Err<&str>> {
         let (input, w_str1) = multispace0(input)?;
@@ -367,22 +358,15 @@ pub mod repl {
 }
 
 pub mod shell {
-    use crate::lex::{ctx_pos, ctx_pos_update, Lexeme, Tok, sep};
     use crate::err;
+    use crate::lex::{ctx_pos, ctx_pos_update, sep, Lexeme, Tok};
     use nom::{
-        branch::alt,
-        bytes::complete::take_while1,
-        character::complete::multispace0,
-        combinator::consumed,
-        IResult
+        branch::alt, bytes::complete::take_while1, character::complete::multispace0,
+        combinator::consumed, IResult,
     };
 
     fn word_char(c: char) -> bool {
-        (c != ' ')
-            && (c != '\t')
-            && (c != '\n')
-            && (c != '\r')
-            && (c != ')') // TODO: what about legit desire to use parens?!
+        (c != ' ') && (c != '\t') && (c != '\n') && (c != '\r') && (c != ')') // TODO: what about legit desire to use parens?!
     }
 
     fn word(input: &str) -> IResult<&str, Tok, err::Err<&str>> {
@@ -412,7 +396,10 @@ pub mod shell {
     }
 }
 
-pub fn lex<'a, 'b>(input: &'a str, mode: &'b mut Mode) -> IResult<&'a str, Vec<Lexeme>, err::Err<&'a str>> {
+pub fn lex<'a, 'b>(
+    input: &'a str,
+    mode: &'b mut Mode,
+) -> IResult<&'a str, Vec<Lexeme>, err::Err<&'a str>> {
     ctx_reset();
     let mut lxs: Vec<Lexeme> = Vec::new();
     let mut inp = input;
@@ -448,10 +435,10 @@ pub fn lex<'a, 'b>(input: &'a str, mode: &'b mut Mode) -> IResult<&'a str, Vec<L
                             println!("close mode toggle, switch mode to {:?}", *mode);
                         }
                     }
-                    _ => ()
+                    _ => (),
                 }
             }
-            _ => ()
+            _ => (),
         }
         lxs.push(lx);
         if inp.len() == 0 {

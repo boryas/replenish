@@ -2,9 +2,13 @@ use std::collections::HashMap;
 use std::fmt;
 use std::io::Write;
 
-use crate::ast::{Arg, BinOp, Cmd, Input, Expr, Single, Special, Stmt};
+use crate::ast::{Arg, BinOp, Cmd, Expr, Single, Special, Stmt};
 use crate::parse::stmt;
 use crate::{err, Err, Mode};
+use nom::{
+    branch::alt, bytes::complete::tag, character::complete::multispace0, sequence::delimited,
+    IResult,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -135,7 +139,7 @@ fn read() -> Result<(usize, String), Err> {
     }
 }
 
-fn toggle_mode(mode: &Mode, new_mode: Option<Mode>) -> Mode {
+fn do_toggle_mode(mode: &Mode, new_mode: Option<Mode>) -> Mode {
     match new_mode {
         Some(m) => m,
         None => match mode {
@@ -149,12 +153,44 @@ fn eval(env: &mut Env, stmt: Stmt) -> Result<Value, Err> {
     match stmt {
         Stmt::Expr(e) => eval_expr(env, e),
         Stmt::Cmd(c) => run_cmd(env, c),
-        _ => Err(Err::Eval),
     }
 }
 
-fn handle_line<'a, 'b>(input: &'a str, mode: &'b Mode) -> Result<Input, err::Err<&'a str>> {
-    Err(err::Err::Unimp)
+fn help(input: &str) -> IResult<&str, Special, err::Err<&str>> {
+    let (input, _) = alt((tag("!?"), tag("!help"), tag("!h")))(input)?;
+    Ok((input, Special::Help))
+}
+
+fn quit(input: &str) -> IResult<&str, Special, err::Err<&str>> {
+    let (input, _) = alt((tag("!quit"), tag("!q")))(input)?;
+    Ok((input, Special::Quit))
+}
+
+fn toggle_mode(input: &str) -> IResult<&str, Option<Mode>, err::Err<&str>> {
+    let (input, _) = alt((tag("!mode"), tag("!m")))(input)?;
+    Ok((input, None))
+}
+
+fn shell_mode(input: &str) -> IResult<&str, Option<Mode>, err::Err<&str>> {
+    let (input, _) = tag("!shell")(input)?;
+    Ok((input, Some(Mode::Shell)))
+}
+
+fn repl_mode(input: &str) -> IResult<&str, Option<Mode>, err::Err<&str>> {
+    let (input, _) = tag("!repl")(input)?;
+    Ok((input, Some(Mode::Repl)))
+}
+
+fn mode(input: &str) -> IResult<&str, Special, err::Err<&str>> {
+    let (input, m) = alt((toggle_mode, shell_mode, repl_mode))(input)?;
+    Ok((input, Special::Mode(m)))
+}
+
+fn special(input: &str) -> Option<Special> {
+    match delimited(multispace0, alt((help, mode, quit)), multispace0)(input) {
+        Ok(("", s)) => Some(s),
+        _ => None,
+    }
 }
 
 pub fn replnsh() {
@@ -168,14 +204,17 @@ pub fn replnsh() {
             Ok((_, l)) => l,
             _ => panic!("input error!"),
         };
-        match parse(&line, &mode) {
-            Ok(Stmt::Special(s)) => match s {
+        if let Some(s) = special(&line) {
+            match s {
                 Special::Help => println!("mode: {:?} cmd:expr::shell:repl", mode),
                 Special::Quit => break,
                 Special::Mode(o) => {
-                    mode = toggle_mode(&mode, o);
+                    mode = do_toggle_mode(&mode, o);
                 }
-            },
+            };
+            continue;
+        };
+        match parse(&line, &mode) {
             Ok(s) => match eval(&mut env, s) {
                 Ok(v) => println!("{}", v),
                 Err(e) => {

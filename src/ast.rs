@@ -48,12 +48,4 @@ pub enum Expr {
 pub enum Stmt {
     Expr(Expr),
     Cmd(Cmd),
-    Special(Special),
-}
-
-#[derive(Debug)]
-pub enum Input {
-    Expr(Expr),
-    Cmd(Cmd),
-    Special(Special),
 }

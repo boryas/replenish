@@ -1,10 +1,7 @@
 extern crate nom;
+use crate::ast::Stmt;
 use crate::{err, Mode};
-use crate::ast::{Special, Stmt};
-use nom::{
-    branch::alt, bytes::complete::tag, character::complete::multispace0, combinator::all_consuming,
-    error::context, IResult,
-};
+use nom::{character::complete::multispace0, combinator::all_consuming, error::context, IResult};
 use std::cell::RefCell;
 
 thread_local! {
@@ -176,7 +173,6 @@ pub mod expr {
         let ret = match c {
             Stmt::Cmd(c) => Expr::Cmd(c),
             Stmt::Expr(e) => e,
-            Stmt::Special(_s) => Expr::Single(Single::Str("".to_string())),
         };
         let (input, _) = context("cmd expr", tag(")"))(input)?;
         crate::parse::dec_toggle_depth();
@@ -226,41 +222,6 @@ pub mod expr {
     }
 }
 
-fn help(input: &str) -> IResult<&str, Special, err::Err<&str>> {
-    let (input, _) = alt((tag("?"), tag("help"), tag(":h")))(input)?;
-    Ok((input, Special::Help))
-}
-
-fn quit(input: &str) -> IResult<&str, Special, err::Err<&str>> {
-    let (input, _) = alt((tag("quit"), tag(":q")))(input)?;
-    Ok((input, Special::Quit))
-}
-
-fn toggle_mode(input: &str) -> IResult<&str, Option<Mode>, err::Err<&str>> {
-    let (input, _) = alt((tag("mode"), tag(":m")))(input)?;
-    Ok((input, None))
-}
-
-fn shell_mode(input: &str) -> IResult<&str, Option<Mode>, err::Err<&str>> {
-    let (input, _) = tag("cmd")(input)?;
-    Ok((input, Some(Mode::Shell)))
-}
-
-fn repl_mode(input: &str) -> IResult<&str, Option<Mode>, err::Err<&str>> {
-    let (input, _) = tag("expr")(input)?;
-    Ok((input, Some(Mode::Repl)))
-}
-
-fn mode(input: &str) -> IResult<&str, Special, err::Err<&str>> {
-    let (input, m) = alt((toggle_mode, shell_mode, repl_mode))(input)?;
-    Ok((input, Special::Mode(m)))
-}
-
-fn special(input: &str) -> IResult<&str, Stmt, err::Err<&str>> {
-    let (input, s) = alt((help, mode, quit))(input)?;
-    Ok((input, Stmt::Special(s)))
-}
-
 fn expr_stmt(input: &str) -> IResult<&str, Stmt, err::Err<&str>> {
     let (input, e) = crate::parse::expr::expr(input)?;
     Ok((input, Stmt::Expr(e)))
@@ -269,9 +230,14 @@ fn expr_stmt(input: &str) -> IResult<&str, Stmt, err::Err<&str>> {
 pub fn stmt<'a, 'b>(input: &'a str, mode: &'b Mode) -> IResult<&'a str, Stmt, err::Err<&'a str>> {
     let (input, _) = multispace0(input)?;
     let (input, ret) = match mode {
-        Mode::Shell => context("cmd mode", alt((special, cmd::cmd)))(input),
-        Mode::Repl => context("expr mode", alt((special, expr_stmt)))(input),
+        Mode::Shell => context("cmd mode", cmd::cmd)(input),
+        Mode::Repl => context("expr mode", expr_stmt)(input),
     }?;
     let (input, _) = context("stmt", all_consuming(multispace0))(input)?;
     Ok((input, ret))
+}
+
+pub fn parse<'a, 'b>(input: &'a str, mode: &'b Mode) -> IResult<&'a str, Stmt, err::Err<&'a str>> {
+    // TODO wat
+    Err(nom::Err::Error(err::Err::Unimp))
 }
