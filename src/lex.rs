@@ -421,8 +421,8 @@ pub fn lex<'a>(input: &'a str, mode: &'a mut Mode) -> IResult<&'a str, Vec<Lexem
     let mut inp = input;
     loop {
         let lex_one_fn = match mode {
-            Mode::Cmd => crate::lex::shell::lex_one,
-            Mode::Expr => crate::lex::repl::lex_one,
+            Mode::Shell => crate::lex::shell::lex_one,
+            Mode::Repl => crate::lex::repl::lex_one,
         };
         let (i_tmp, (lx_str, lx)) = consumed(lex_one_fn)(inp)?;
         inp = i_tmp;
@@ -432,8 +432,8 @@ pub fn lex<'a>(input: &'a str, mode: &'a mut Mode) -> IResult<&'a str, Vec<Lexem
         match lx.tok {
             Tok::OpenModeToggle => {
                 *mode = match mode {
-                    Mode::Cmd => Mode::Expr,
-                    Mode::Expr => Mode::Cmd,
+                    Mode::Shell => Mode::Repl,
+                    Mode::Repl => Mode::Shell,
                 };
                 println!("open mode toggle, switch mode to {:?}", *mode);
                 ctx_push_paren(&lx);
@@ -445,8 +445,8 @@ pub fn lex<'a>(input: &'a str, mode: &'a mut Mode) -> IResult<&'a str, Vec<Lexem
                     Some(open_lx) => {
                         if open_lx.tok == Tok::OpenModeToggle {
                             *mode = match mode {
-                                Mode::Cmd => Mode::Expr,
-                                Mode::Expr => Mode::Cmd,
+                                Mode::Shell => Mode::Repl,
+                                Mode::Repl => Mode::Shell,
                             };
                             println!("close mode toggle, switch mode to {:?}", *mode);
                         }
@@ -485,12 +485,12 @@ fn do_lex_test(inputs: Vec<&str>, expected: Vec<Tok>, mut mode: Mode) {
 
 #[cfg(test)]
 fn do_repl_lex_test(inputs: Vec<&str>, expected: Vec<Tok>) {
-    do_lex_test(inputs, expected, Mode::Expr)
+    do_lex_test(inputs, expected, Mode::Repl)
 }
 
 #[cfg(test)]
 fn do_shell_lex_test(inputs: Vec<&str>, expected: Vec<Tok>) {
-    do_lex_test(inputs, expected, Mode::Cmd)
+    do_lex_test(inputs, expected, Mode::Shell)
 }
 
 #[test]
@@ -554,7 +554,7 @@ fn do_binop_test(op_str: &str, op: Op) {
         format!("42 {}42", op_str),
     ];
     // Can't use do_repl_lex_test because of String vs &str
-    let mut mode = Mode::Expr;
+    let mut mode = Mode::Repl;
     for input in inputs.into_iter() {
         match lex(&input, &mut mode) {
             Ok((i, actual)) => {

@@ -276,18 +276,18 @@ fn toggle_mode(input: &str) -> IResult<&str, Option<Mode>, err::Err<&str>> {
     Ok((input, None))
 }
 
-fn cmd_mode(input: &str) -> IResult<&str, Option<Mode>, err::Err<&str>> {
+fn shell_mode(input: &str) -> IResult<&str, Option<Mode>, err::Err<&str>> {
     let (input, _) = tag("cmd")(input)?;
-    Ok((input, Some(Mode::Cmd)))
+    Ok((input, Some(Mode::Shell)))
 }
 
-fn expr_mode(input: &str) -> IResult<&str, Option<Mode>, err::Err<&str>> {
+fn repl_mode(input: &str) -> IResult<&str, Option<Mode>, err::Err<&str>> {
     let (input, _) = tag("expr")(input)?;
-    Ok((input, Some(Mode::Expr)))
+    Ok((input, Some(Mode::Repl)))
 }
 
 fn mode(input: &str) -> IResult<&str, Special, err::Err<&str>> {
-    let (input, m) = alt((toggle_mode, cmd_mode, expr_mode))(input)?;
+    let (input, m) = alt((toggle_mode, shell_mode, repl_mode))(input)?;
     Ok((input, Special::Mode(m)))
 }
 
@@ -304,8 +304,8 @@ fn expr_stmt(input: &str) -> IResult<&str, Stmt, err::Err<&str>> {
 pub fn stmt<'a, 'b>(input: &'a str, mode: &'b Mode) -> IResult<&'a str, Stmt, err::Err<&'a str>> {
     let (input, _) = multispace0(input)?;
     let (input, ret) = match mode {
-        Mode::Cmd => context("cmd mode", alt((special, cmd::cmd)))(input),
-        Mode::Expr => context("expr mode", alt((special, expr_stmt)))(input),
+        Mode::Shell => context("cmd mode", alt((special, cmd::cmd)))(input),
+        Mode::Repl => context("expr mode", alt((special, expr_stmt)))(input),
     }?;
     let (input, _) = context("stmt", all_consuming(multispace0))(input)?;
     Ok((input, ret))

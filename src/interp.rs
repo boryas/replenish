@@ -139,8 +139,8 @@ fn toggle_mode(mode: &Mode, new_mode: Option<Mode>) -> Mode {
     match new_mode {
         Some(m) => m,
         None => match mode {
-            Mode::Cmd => Mode::Expr,
-            Mode::Expr => Mode::Cmd,
+            Mode::Shell => Mode::Repl,
+            Mode::Repl => Mode::Shell,
         },
     }
 }
@@ -155,7 +155,7 @@ fn eval(env: &mut Env, stmt: Stmt) -> Result<Value, Err> {
 
 pub fn repl() {
     let mut env = Env::new();
-    let mut mode = Mode::Cmd;
+    let mut mode = Mode::Shell;
     loop {
         print!("{:?}> ", mode);
         std::io::stdout().flush().expect("failed to flush prompt");

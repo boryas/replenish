@@ -20,8 +20,8 @@ pub struct Cmd {
 
 #[derive(Debug, PartialEq)]
 pub enum Mode {
-    Cmd,
-    Expr,
+    Repl,
+    Shell,
 }
 
 #[derive(Debug, PartialEq)]
