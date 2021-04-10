@@ -6,7 +6,7 @@ use nom::{
     combinator::{consumed, map_res, not, peek, recognize, verify},
     multi::many0,
     sequence::{delimited, tuple},
-    AsChar, IResult,
+    AsChar, IResult, InputIter, Needed,
 };
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -73,12 +73,34 @@ impl Lexemes {
     }
 }
 
-/*
-impl InputIter for Lexemes {
-    type Item = Lexeme;
+impl<'a> InputIter for &'a Lexemes {
+    type Item = &'a Lexeme;
+    //type IterElem = std::vec::IntoIter<Lexeme>;
+    type IterElem = std::slice::Iter<'a, Lexeme>;
+    type Iter = std::iter::Enumerate<Self::IterElem>;
     // good god
+    fn iter_indices(&self) -> Self::Iter {
+        self.lxs.iter().enumerate()
+    }
+
+    fn iter_elements(&self) -> Self::IterElem {
+        self.lxs.iter()
+    }
+
+    fn position<P>(&self, predicate: P) -> Option<usize>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        self.lxs.iter().position(|b| predicate(b))
+    }
+
+    fn slice_index(&self, count: usize) -> Result<usize, Needed> {
+        if self.lxs.len() >= count {
+            return Ok(count);
+        }
+        Err(Needed::new(count - self.lxs.len()))
+    }
 }
-*/
 
 struct LexCtx {
     pos: LexPos,
