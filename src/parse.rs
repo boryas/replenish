@@ -1,7 +1,8 @@
 extern crate nom;
-use crate::ast::Stmt;
 use crate::{err, Mode};
-use nom::{character::complete::multispace0, combinator::all_consuming, error::context, IResult};
+use crate::ast::Stmt;
+use crate::lex::{lex, Lexemes};
+use nom::{character::complete::multispace0, combinator::all_consuming, error::context, IResult, InputIter};
 use std::cell::RefCell;
 
 thread_local! {
@@ -238,9 +239,23 @@ pub fn stmt<'a, 'b>(input: &'a str, mode: &'b Mode) -> IResult<&'a str, Stmt, er
 }
 
 pub fn parse<'a, 'b>(
-    _input: &'a str,
+    input: Lexemes<'a>,
     _mode: &'b Mode,
-) -> IResult<&'a str, Stmt, err::Err<&'a str>> {
+) -> IResult<Lexemes<'a>, Stmt, err::Err<Lexemes<'a>>> {
     // TODO wat
+    for lx in input.iter_elements() {
+        println!("Parse sees lexeme {:?}", lx);
+    }
     Err(nom::Err::Error(err::Err::Unimp))
+}
+
+#[test]
+fn dummy_parse() {
+    let mut mode = Mode::Shell;
+    let lx = match lex("ls -l foo", &mut mode) {
+        Ok((input, lx)) => lx,
+        e => panic!("bad lex {:?}", e),
+    };
+    let lxs = Lexemes::new(&lx[..]);
+    parse(lxs, &mut mode);
 }

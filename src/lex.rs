@@ -6,7 +6,7 @@ use nom::{
     combinator::{consumed, map_res, not, peek, recognize, verify},
     multi::many0,
     sequence::{delimited, tuple},
-    AsChar, IResult, InputIter, Needed,
+    AsChar, IResult, InputIter, InputTake, Needed,
 };
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -63,19 +63,18 @@ pub struct Lexeme {
 }
 
 #[derive(Debug)]
-pub struct Lexemes {
-    lxs: Vec<Lexeme>,
+pub struct Lexemes<'a> {
+    lxs: &'a [Lexeme],
 }
 
-impl Lexemes {
-    pub fn new(lxs: Vec<Lexeme>) -> Self {
+impl <'a> Lexemes<'a> {
+    pub fn new(lxs: &'a [Lexeme]) -> Self {
         Lexemes { lxs: lxs }
     }
 }
 
-impl<'a> InputIter for &'a Lexemes {
+impl<'a> InputIter for Lexemes<'a> {
     type Item = &'a Lexeme;
-    //type IterElem = std::vec::IntoIter<Lexeme>;
     type IterElem = std::slice::Iter<'a, Lexeme>;
     type Iter = std::iter::Enumerate<Self::IterElem>;
     // good god
@@ -99,6 +98,16 @@ impl<'a> InputIter for &'a Lexemes {
             return Ok(count);
         }
         Err(Needed::new(count - self.lxs.len()))
+    }
+}
+
+impl<'a> InputTake for Lexemes<'a> {
+    fn take(&self, count: usize) -> Self {
+        Lexemes::new(&self.lxs[..count])
+    }
+
+    fn take_split(&self, count: usize) -> (Self, Self) {
+        (Lexemes::new(&self.lxs[..count]), Lexemes::new(&self.lxs[count..]))
     }
 }
 
