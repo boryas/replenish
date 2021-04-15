@@ -6,7 +6,7 @@ use nom::{
     combinator::{consumed, map_res, not, peek, recognize, verify},
     multi::many0,
     sequence::{delimited, tuple},
-    AsChar, IResult, InputIter, InputTake, Needed,
+    AsChar, IResult, InputIter, InputLength, InputTake, Needed,
 };
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -57,14 +57,14 @@ pub struct LexPos {
 
 #[derive(Clone, Debug)]
 pub struct Lexeme {
-    tok: Tok,
+    pub tok: Tok,
     pos: LexPos,
     len: usize,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Lexemes<'a> {
-    lxs: &'a [Lexeme],
+    pub lxs: &'a [Lexeme],
 }
 
 impl <'a> Lexemes<'a> {
@@ -73,6 +73,7 @@ impl <'a> Lexemes<'a> {
     }
 }
 
+// TODO: make Lexemes "naturally" iterable via the slice and use that for the nom specific iter
 impl<'a> InputIter for Lexemes<'a> {
     type Item = &'a Lexeme;
     type IterElem = std::slice::Iter<'a, Lexeme>;
@@ -110,6 +111,36 @@ impl<'a> InputTake for Lexemes<'a> {
         (Lexemes::new(&self.lxs[..count]), Lexemes::new(&self.lxs[count..]))
     }
 }
+
+impl<'a> InputLength for Lexemes<'a> {
+    fn input_len(&self) -> usize {
+        self.lxs.len()
+    }
+}
+
+// WHY WOULD LETTING ME IMPLEMENT COMPARE FOR A SLICE BE SO BAD?!
+// MOOOOOOO
+/*
+impl<'a, 'b> Compare<&'b [Tok]> for Lexemes<'a> {
+    fn compare(&self, toks: &'b [Tok]) -> CompareResult {
+        let pos = self.iter_elements().zip(toks.iter()).position(|l, t| l.tok!= t);
+        match pos {
+            None {
+                if (self.len() >= toks.len()) {
+                    CompareResult::Ok
+                } else {
+                    CompareResult::Incomplete
+                }
+            },
+            Some(_) => CompareResult::Error,
+        }
+    }
+
+    fn compare_no_case(&self, toks: &'b [Tok]) -> CompareResult {
+        compare(self, toks)
+    }
+}
+*/
 
 struct LexCtx {
     pos: LexPos,

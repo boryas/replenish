@@ -1,8 +1,8 @@
 extern crate nom;
 use crate::{err, Mode};
 use crate::ast::Stmt;
-use crate::lex::{lex, Lexemes};
-use nom::{character::complete::multispace0, combinator::all_consuming, error::context, IResult, InputIter};
+use crate::lex::{lex, Lexemes, Tok};
+use nom::{character::complete::multispace0, combinator::all_consuming, error::context, IResult, InputIter, InputLength, InputTake};
 use std::cell::RefCell;
 
 thread_local! {
@@ -242,19 +242,46 @@ pub fn parse<'a, 'b>(
     input: Lexemes<'a>,
     _mode: &'b Mode,
 ) -> IResult<Lexemes<'a>, Stmt, err::Err<Lexemes<'a>>> {
-    // TODO wat
     for lx in input.iter_elements() {
         println!("Parse sees lexeme {:?}", lx);
     }
     Err(nom::Err::Error(err::Err::Unimp))
 }
 
-fn tok_tag<'a>(input: Lexemes<'a>, tok: Tok) -> IResult<Lexemes<'a>, Tok, err::Err<Lexemes<'a>>>{
-    let input = input.take(1);
-    if input.lxs[0].tok == tok {
-        tok
+// TODO: make this match tag. namely tag(tok)(input) vs. tag(input, tok)
+//fn tok_tag<'a>(input: Lexemes<'a>, tok: Tok) -> IResult<Lexemes<'a>, Tok, err::Err<Lexemes<'a>>>{
+// WHY IS EVERYTHING SO FUCKING HORRIBLE
+// ALL OF RUST IS SFINAE
+// JESUS CHRIST
+//fn tok_tag<'a>(tag: Tok) -> impl Fn(Lexemes<'a>) -> IResult<Lexemes<'a>, Lexemes<'a>, err:Err<Lexemes<'a>>>
+//{
+fn tok_tag<'a>(input: Lexemes<'a>, tok: Tok) -> IResult<Lexemes<'a>, Tok, err::Err<Lexemes<'a>>> {
+    let (one, rest) = input.take_split(1);
+    if one.lxs[0].tok == tok {
+        return Ok((rest, tok))
     }
-    Err(nom::Err::Error(err::Err::Nom(input, nom:Err::TagError)))
+    Err(nom::Err::Error(err::Err::Nom(input, nom::error::ErrorKind::Tag)))
+}
+
+#[test]
+fn tok_tag_shell_word() {
+    let mut mode = Mode::Shell;
+    let lx = match lex("ls -l foo", &mut mode) {
+        Ok((input, lx)) => lx,
+        e => panic!("bad lex {:?}", e),
+    };
+    let lxs = Lexemes::new(&lx[..]);
+    let expected = Tok::Word("ls".to_string());
+    match tok_tag(lxs, expected.clone()) {
+        Ok((rest, tok)) => {
+            assert_eq!(2, rest.lxs.len());
+            assert_eq!(tok, expected);
+        },
+        e => {
+            panic!("wrong token!");
+            // TODO test error message quality?
+        }
+    }
 }
 
 #[test]
