@@ -6,7 +6,7 @@ use nom::{
     combinator::{consumed, map_res, not, peek, recognize, verify},
     multi::many0,
     sequence::{delimited, tuple},
-    AsChar, IResult, InputIter, InputLength, InputTake, Needed,
+    AsChar, Compare, CompareResult, IResult, InputIter, InputLength, InputTake, Needed,
 };
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -63,6 +63,22 @@ pub struct Lexeme {
 }
 
 #[derive(Clone, Debug)]
+pub struct Toks<'a> {
+    pub ts: &'a [Tok],
+}
+
+impl <'a> Toks<'a> {
+    pub fn new(ts: &'a [Tok]) -> Self {
+        Toks { ts: ts }
+    }
+}
+
+impl<'a> InputLength for Toks<'a> {
+    fn input_len(&self) -> usize {
+        self.ts.len()
+    }
+}
+#[derive(Clone, Debug)]
 pub struct Lexemes<'a> {
     pub lxs: &'a [Lexeme],
 }
@@ -108,7 +124,7 @@ impl<'a> InputTake for Lexemes<'a> {
     }
 
     fn take_split(&self, count: usize) -> (Self, Self) {
-        (Lexemes::new(&self.lxs[..count]), Lexemes::new(&self.lxs[count..]))
+        (Lexemes::new(&self.lxs[count..]), Lexemes::new(&self.lxs[..count]))
     }
 }
 
@@ -119,14 +135,12 @@ impl<'a> InputLength for Lexemes<'a> {
 }
 
 // WHY WOULD LETTING ME IMPLEMENT COMPARE FOR A SLICE BE SO BAD?!
-// MOOOOOOO
-/*
-impl<'a, 'b> Compare<&'b [Tok]> for Lexemes<'a> {
-    fn compare(&self, toks: &'b [Tok]) -> CompareResult {
-        let pos = self.iter_elements().zip(toks.iter()).position(|l, t| l.tok!= t);
+impl<'a, 'b> Compare<Toks<'b>> for Lexemes<'a> {
+    fn compare(&self, toks: Toks<'b>) -> CompareResult {
+        let pos = self.iter_elements().zip(toks.ts.iter()).position(|(l, t)| l.tok != *t);
         match pos {
-            None {
-                if (self.len() >= toks.len()) {
+            None => {
+                if self.lxs.len() >= toks.ts.len() {
                     CompareResult::Ok
                 } else {
                     CompareResult::Incomplete
@@ -136,11 +150,10 @@ impl<'a, 'b> Compare<&'b [Tok]> for Lexemes<'a> {
         }
     }
 
-    fn compare_no_case(&self, toks: &'b [Tok]) -> CompareResult {
-        compare(self, toks)
+    fn compare_no_case(&self, toks: Toks<'b>) -> CompareResult {
+        self.compare(toks)
     }
 }
-*/
 
 struct LexCtx {
     pos: LexPos,

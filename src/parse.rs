@@ -1,8 +1,8 @@
 extern crate nom;
 use crate::{err, Mode};
 use crate::ast::Stmt;
-use crate::lex::{lex, Lexemes, Tok};
-use nom::{character::complete::multispace0, combinator::all_consuming, error::context, IResult, InputIter, InputLength, InputTake};
+use crate::lex::{lex, Lexemes, Tok, Toks};
+use nom::{bytes::complete::tag, character::complete::multispace0, combinator::all_consuming, error::context, IResult, InputIter, InputTake};
 use std::cell::RefCell;
 
 thread_local! {
@@ -248,19 +248,9 @@ pub fn parse<'a, 'b>(
     Err(nom::Err::Error(err::Err::Unimp))
 }
 
-// TODO: make this match tag. namely tag(tok)(input) vs. tag(input, tok)
-//fn tok_tag<'a>(input: Lexemes<'a>, tok: Tok) -> IResult<Lexemes<'a>, Tok, err::Err<Lexemes<'a>>>{
-// WHY IS EVERYTHING SO FUCKING HORRIBLE
-// ALL OF RUST IS SFINAE
-// JESUS CHRIST
-//fn tok_tag<'a>(tag: Tok) -> impl Fn(Lexemes<'a>) -> IResult<Lexemes<'a>, Lexemes<'a>, err:Err<Lexemes<'a>>>
-//{
-fn tok_tag<'a>(input: Lexemes<'a>, tok: Tok) -> IResult<Lexemes<'a>, Tok, err::Err<Lexemes<'a>>> {
-    let (one, rest) = input.take_split(1);
-    if one.lxs[0].tok == tok {
-        return Ok((rest, tok))
-    }
-    Err(nom::Err::Error(err::Err::Nom(input, nom::error::ErrorKind::Tag)))
+#[cfg(test)]
+fn tok_tag<'a>(input: Lexemes<'a>, tok: Tok) -> IResult<Lexemes<'a>, Lexemes<'a>, err::Err<Lexemes<'a>>> {
+    tag(Toks::new(&[tok]))(input)
 }
 
 #[test]
@@ -273,9 +263,12 @@ fn tok_tag_shell_word() {
     let lxs = Lexemes::new(&lx[..]);
     let expected = Tok::Word("ls".to_string());
     match tok_tag(lxs, expected.clone()) {
-        Ok((rest, tok)) => {
+        Ok((rest, tagged)) => {
+            println!("rest: {:?}", rest);
+            println!("tagged: {:?}", tagged);
             assert_eq!(2, rest.lxs.len());
-            assert_eq!(tok, expected);
+            assert_eq!(1, tagged.lxs.len());
+            assert_eq!(tagged.lxs[0].tok, expected);
         },
         e => {
             panic!("wrong token!");
