@@ -3,6 +3,7 @@ use nom::error::{ContextError, ErrorKind, FromExternalError, ParseError};
 #[derive(Debug)]
 pub enum Err<I> {
     Unimp,
+    NotWord(I),
     Int(I, String),
     Nom(I, ErrorKind),
 }

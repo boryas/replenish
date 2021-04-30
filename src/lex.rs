@@ -49,19 +49,6 @@ pub enum Tok {
     Word(String),
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct LexPos {
-    col: usize,
-    ln: usize,
-}
-
-#[derive(Clone, Debug)]
-pub struct Lexeme {
-    pub tok: Tok,
-    pos: LexPos,
-    len: usize,
-}
-
 #[derive(Clone, Debug)]
 pub struct Toks<'a> {
     pub ts: &'a [Tok],
@@ -78,7 +65,21 @@ impl<'a> InputLength for Toks<'a> {
         self.ts.len()
     }
 }
-#[derive(Clone, Debug)]
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LexPos {
+    col: usize,
+    ln: usize,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Lexeme {
+    pub tok: Tok,
+    pos: LexPos,
+    len: usize,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Lexemes<'a> {
     pub lxs: &'a [Lexeme],
 }
@@ -134,7 +135,6 @@ impl<'a> InputLength for Lexemes<'a> {
     }
 }
 
-// WHY WOULD LETTING ME IMPLEMENT COMPARE FOR A SLICE BE SO BAD?!
 impl<'a, 'b> Compare<Toks<'b>> for Lexemes<'a> {
     fn compare(&self, toks: Toks<'b>) -> CompareResult {
         let pos = self.iter_elements().zip(toks.ts.iter()).position(|(l, t)| l.tok != *t);

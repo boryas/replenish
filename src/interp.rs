@@ -2,9 +2,13 @@ use std::collections::HashMap;
 use std::fmt;
 use std::io::Write;
 
-use crate::ast::{Arg, BinOp, Cmd, Expr, Single, Special, Stmt};
-use crate::parse::stmt;
-use crate::{err, Err, Mode};
+use crate::{
+    ast::{Arg, BinOp, Cmd, Expr, Single, Special, Stmt},
+    lex::{lex, Lexemes},
+    parse::{parse},
+    err, Err, Mode
+};
+
 use nom::{
     branch::alt, bytes::complete::tag, character::complete::multispace0, sequence::delimited,
     IResult,
@@ -100,6 +104,7 @@ fn eval_expr(env: &mut Env, expr: Expr) -> Result<Value, Err> {
     }
 }
 
+/*
 fn parse(input: &str, mode: &Mode) -> Result<Stmt, Err> {
     match stmt(input, mode) {
         Ok(("", s)) => Ok(s),
@@ -110,6 +115,7 @@ fn parse(input: &str, mode: &Mode) -> Result<Stmt, Err> {
         _ => Err(Err::Parse),
     }
 }
+*/
 
 fn run_cmd(env: &mut Env, cmd: Cmd) -> Result<Value, Err> {
     let mut proc = std::process::Command::new(cmd.cmd);
@@ -214,8 +220,20 @@ pub fn replnsh() {
             };
             continue;
         };
-        match parse(&line, &mode) {
-            Ok(s) => match eval(&mut env, s) {
+        let lx = match lex(&line, &mut mode) {
+            Ok(("", lx)) => lx,
+            Ok((rest, _)) => {
+                println!("didn't lex: {}", rest);
+                continue;
+            },
+            Err(e) => {
+                println!("lex error: {:?}", e);
+                continue;
+            },
+        };
+        let lxs = Lexemes::new(&lx[..]);
+        match parse(lxs, &mut mode) {
+            Ok((_, s)) => match eval(&mut env, s) {
                 Ok(v) => println!("{}", v),
                 Err(e) => {
                     println!("{:?}", e);

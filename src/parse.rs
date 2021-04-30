@@ -1,8 +1,8 @@
 extern crate nom;
 use crate::{err, Mode};
-use crate::ast::Stmt;
+use crate::ast::{Arg, Stmt};
 use crate::lex::{lex, Lexemes, Tok, Toks};
-use nom::{bytes::complete::tag, character::complete::multispace0, combinator::all_consuming, error::context, IResult, InputIter, InputTake};
+use nom::{bytes::complete::tag, character::complete::multispace0, combinator::all_consuming, error::context, IResult, InputIter};
 use std::cell::RefCell;
 
 thread_local! {
@@ -26,14 +26,17 @@ fn dec_toggle_depth() {
 }
 
 pub mod cmd {
-    use crate::ast::{Arg, Cmd, Stmt};
-    use crate::err;
+    use crate::{
+        ast::{Arg, Cmd, Stmt},
+        lex::{Lexemes, Tok},
+        err,
+    };
     use nom::{
         branch::alt,
-        bytes::complete::{tag, take_while1},
+        bytes::complete::{tag, take, take_while1},
         character::complete::multispace1,
-        combinator::recognize,
-        multi::many0,
+        combinator::{recognize},
+        multi::{many0},
         IResult,
     };
 
@@ -75,10 +78,38 @@ pub mod cmd {
             }),
         ))
     }
+
+    fn word(input: Lexemes) -> IResult<Lexemes, String, err::Err<Lexemes>> {
+        let (rest, lx) = take(1usize)(input)?;
+        match &lx.lxs[0].tok {
+            Tok::Word(w) => Ok((rest, w.clone())),
+            _ => Err(nom::Err::Error(err::Err::NotWord(lx)))
+        }
+    }
+
+    fn expr_arg2(_input: Lexemes) -> IResult<Lexemes, Arg, err::Err<Lexemes>> {
+        Err(nom::Err::Error(err::Err::Unimp))
+    }
+
+    fn cmd_arg2(input: Lexemes) -> IResult<Lexemes, Arg, err::Err<Lexemes>> {
+        let (rest, w) = word(input)?;
+        Ok((rest, Arg::Raw(w)))
+    }
+
+    fn arg2(input: Lexemes) -> IResult<Lexemes, Arg, err::Err<Lexemes>> {
+        alt((expr_arg2, cmd_arg2))(input)
+    }
+
+    pub fn cmd2(input: Lexemes) -> IResult<Lexemes, Stmt, err::Err<Lexemes>> {
+        let (input, cmd) = word(input)?;
+        let (input, args) = many0(arg2)(input)?;
+        Ok((input, Stmt::Cmd(Cmd { cmd: cmd, args: args })))
+    }
 }
 
 pub mod expr {
     use crate::ast::{BinOp, Expr, Single, Stmt};
+    use crate::lex::{Lexemes};
     use crate::err;
     use nom::{
         branch::alt,
@@ -221,6 +252,10 @@ pub mod expr {
             ),
         )(input)
     }
+
+    pub fn expr2(_input: Lexemes) -> IResult<Lexemes, Stmt, err::Err<Lexemes>> {
+        Err(nom::Err::Error(err::Err::Unimp))
+    }
 }
 
 fn expr_stmt(input: &str) -> IResult<&str, Stmt, err::Err<&str>> {
@@ -240,16 +275,18 @@ pub fn stmt<'a, 'b>(input: &'a str, mode: &'b Mode) -> IResult<&'a str, Stmt, er
 
 pub fn parse<'a, 'b>(
     input: Lexemes<'a>,
-    _mode: &'b Mode,
+    mode: &'b Mode,
 ) -> IResult<Lexemes<'a>, Stmt, err::Err<Lexemes<'a>>> {
-    for lx in input.iter_elements() {
-        println!("Parse sees lexeme {:?}", lx);
-    }
-    Err(nom::Err::Error(err::Err::Unimp))
+    let (input, ret) = match mode {
+        Mode::Shell => cmd::cmd2(input),
+        Mode::Repl => expr::expr2(input),
+    }?;
+    // TODO: all_consuming or equivalent
+    Ok((input, ret))
 }
 
 #[cfg(test)]
-fn tok_tag<'a>(input: Lexemes<'a>, tok: Tok) -> IResult<Lexemes<'a>, Lexemes<'a>, err::Err<Lexemes<'a>>> {
+fn tok_tag(input: Lexemes, tok: Tok) -> IResult<Lexemes, Lexemes, err::Err<Lexemes>> {
     tag(Toks::new(&[tok]))(input)
 }
 
@@ -257,20 +294,20 @@ fn tok_tag<'a>(input: Lexemes<'a>, tok: Tok) -> IResult<Lexemes<'a>, Lexemes<'a>
 fn tok_tag_shell_word() {
     let mut mode = Mode::Shell;
     let lx = match lex("ls -l foo", &mut mode) {
-        Ok((input, lx)) => lx,
+        Ok((_, lx)) => lx,
         e => panic!("bad lex {:?}", e),
     };
     let lxs = Lexemes::new(&lx[..]);
     let expected = Tok::Word("ls".to_string());
     match tok_tag(lxs, expected.clone()) {
         Ok((rest, tagged)) => {
-            println!("rest: {:?}", rest);
-            println!("tagged: {:?}", tagged);
             assert_eq!(2, rest.lxs.len());
+            assert_eq!(rest.lxs[0].tok, Tok::Word("-l".to_string()));
+            assert_eq!(rest.lxs[1].tok, Tok::Word("foo".to_string()));
             assert_eq!(1, tagged.lxs.len());
             assert_eq!(tagged.lxs[0].tok, expected);
         },
-        e => {
+        _e => {
             panic!("wrong token!");
             // TODO test error message quality?
         }
@@ -278,12 +315,21 @@ fn tok_tag_shell_word() {
 }
 
 #[test]
-fn dummy_parse() {
+fn parse_simple_cmd() {
     let mut mode = Mode::Shell;
     let lx = match lex("ls -l foo", &mut mode) {
-        Ok((input, lx)) => lx,
+        Ok((_, lx)) => lx,
         e => panic!("bad lex {:?}", e),
     };
     let lxs = Lexemes::new(&lx[..]);
-    parse(lxs, &mut mode);
+    let stmt = parse(lxs, &mut mode);
+    match stmt {
+        Ok((rest, Stmt::Cmd(cmd))) => {
+            assert_eq!(rest.lxs.len(), 0);
+            assert_eq!(cmd.cmd, "ls".to_string());
+            assert_eq!(cmd.args, vec![Arg::Raw("-l".to_string()), Arg::Raw("foo".to_string())]);
+            println!("{:?}", cmd);
+        }
+        e => panic!("bad parse {:?}", e),
+    }
 }
