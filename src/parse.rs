@@ -4,43 +4,19 @@ use crate::lex::{lex, Lexemes, Tok, Toks};
 use crate::{err, Mode};
 use nom::{
     bytes::complete::tag,
-    character::complete::multispace0,
-    combinator::{all_consuming, map},
+    combinator::map,
     IResult, InputIter,
 };
-use std::cell::RefCell;
-
-thread_local! {
-    pub static MODE_TOGGLE_DEPTH: RefCell<u32> = RefCell::new(0);
-}
-
-fn get_toggle_depth() -> u32 {
-    MODE_TOGGLE_DEPTH.with(|d| *d.borrow())
-}
-
-fn inc_toggle_depth() {
-    MODE_TOGGLE_DEPTH.with(|d| {
-        *d.borrow_mut() += 1;
-    })
-}
-
-fn dec_toggle_depth() {
-    MODE_TOGGLE_DEPTH.with(|d| {
-        *d.borrow_mut() -= 1;
-    })
-}
 
 pub mod cmd {
     use crate::{
-        ast::{Arg, Cmd, Stmt},
+        ast::{Arg, Cmd},
         err,
         lex::{Lexemes, Tok, Toks},
     };
     use nom::{
         branch::alt,
-        bytes::complete::{tag, take, take_while1},
-        character::complete::multispace1,
-        combinator::recognize,
+        bytes::complete::{tag, take},
         multi::many0,
         IResult,
     };
@@ -84,19 +60,14 @@ pub mod cmd {
 
 pub mod expr {
     use crate::{
-        ast::{BinOp, Expr, Single, Stmt},
+        ast::{Expr, Single},
         err,
         lex::{Lexemes, Op, Tok, Toks},
     };
     use nom::{
         branch::alt,
         bytes::complete::{tag, take},
-        character::complete::{alphanumeric0, anychar, digit1, multispace0, multispace1, one_of},
-        combinator::{map_res, opt, recognize, verify},
-        error::context,
-        multi::many0,
-        sequence::{delimited, tuple},
-        AsChar, IResult,
+        IResult,
     };
 
     fn tok(input: Lexemes) -> IResult<Lexemes, &Tok, err::Err<Lexemes>> {
@@ -105,7 +76,7 @@ pub mod expr {
     }
 
     fn not_int_error(input: Lexemes) -> IResult<Lexemes, Single, err::Err<Lexemes>> {
-        let (input, lx) = take(1usize)(input)?;
+        let (_, lx) = take(1usize)(input)?;
         Err(nom::Err::Error(err::Err::NotInt(lx)))
     }
 
@@ -117,7 +88,7 @@ pub mod expr {
     }
 
     fn not_str_error(input: Lexemes) -> IResult<Lexemes, Single, err::Err<Lexemes>> {
-        let (input, lx) = take(1usize)(input)?;
+        let (_, lx) = take(1usize)(input)?;
         Err(nom::Err::Error(err::Err::NotStr(lx)))
     }
 
@@ -129,7 +100,7 @@ pub mod expr {
     }
 
     fn not_iden_error(input: Lexemes) -> IResult<Lexemes, Single, err::Err<Lexemes>> {
-        let (input, lx) = take(1usize)(input)?;
+        let (_, lx) = take(1usize)(input)?;
         Err(nom::Err::Error(err::Err::NotIden(lx)))
     }
 
