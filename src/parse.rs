@@ -269,27 +269,45 @@ pub mod expr {
         )(input)
     }
 
-    fn integer2(input: Lexemes) -> IResult<Lexemes, Single, err::Err<Lexemes>> {
+    fn tok(input: Lexemes) -> IResult<Lexemes, &Tok, err::Err<Lexemes>> {
         let (input, lx) = take(1usize)(input)?;
-        match &lx.lxs[0].tok {
-            Tok::IntLit(i) => Ok((input, Single::Integer(*i))),
-            _ => Err(nom::Err::Error(err::Err::NotInt(lx))),
+        Ok((input, &lx.lxs[0].tok))
+    }
+
+    fn not_int_error(input: Lexemes) -> IResult<Lexemes, Single, err::Err<Lexemes>> {
+        let (input, lx) = take(1usize)(input)?;
+        Err(nom::Err::Error(err::Err::NotInt(lx)))
+    }
+
+    fn integer2(input: Lexemes) -> IResult<Lexemes, Single, err::Err<Lexemes>> {
+        match tok(input)? {
+            (input, Tok::IntLit(i)) => Ok((input, Single::Integer(*i))),
+            _ => not_int_error(input),
         }
+    }
+
+    fn not_str_error(input: Lexemes) -> IResult<Lexemes, Single, err::Err<Lexemes>> {
+        let (input, lx) = take(1usize)(input)?;
+        Err(nom::Err::Error(err::Err::NotStr(lx)))
     }
 
     fn str2(input: Lexemes) -> IResult<Lexemes, Single, err::Err<Lexemes>> {
-        let (input, lx) = take(1usize)(input)?;
-        match &lx.lxs[0].tok {
-            Tok::StrLit(s) => Ok((input, Single::Str((*s).to_string()))),
-            _ => Err(nom::Err::Error(err::Err::NotStr(lx))),
+        match tok(input)? {
+            (input, Tok::StrLit(s)) => Ok((input, Single::Str((*s).to_string()))),
+            _ => not_str_error(input),
         }
     }
 
-    fn iden2(input: Lexemes) -> IResult<Lexemes, Single, err::Err<Lexemes>> {
+    fn not_iden_error(input: Lexemes) -> IResult<Lexemes, Single, err::Err<Lexemes>> {
         let (input, lx) = take(1usize)(input)?;
-        match &lx.lxs[0].tok {
-            Tok::Iden(s) => Ok((input, Single::Iden((*s).to_string()))),
-            _ => Err(nom::Err::Error(err::Err::NotIden(lx))),
+        Err(nom::Err::Error(err::Err::NotIden(lx)))
+    }
+
+
+    fn iden2(input: Lexemes) -> IResult<Lexemes, Single, err::Err<Lexemes>> {
+        match tok(input)? {
+            (input, Tok::Iden(s)) => Ok((input, Single::Iden((*s).to_string()))),
+            _ => not_iden_error(input),
         }
     }
 
